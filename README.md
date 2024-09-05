@@ -25,12 +25,10 @@ We strongly recommend using Docker to run WebP Server Go because running it dire
 Make sure you've got Docker and `docker-compose` installed, create a directory and create `docker-compose.yml` file inside it like this:
 
 ```yml
-version: '3'
 
 services:
   webp:
-    image: webpsh/webp-server-go
-    # image: ghcr.io/webp-sh/webp_server_go
+    image: woodchen/webp-server-go
     restart: always
     volumes:
       - ./path/to/pics:/opt/pics
