@@ -7,8 +7,6 @@ on:
       - 'config.json'
     branches:
       - 'master'
-    tags:
-      - '*'
 
 env:
   IMAGE_NAME: webp-server-go
