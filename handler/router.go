@@ -16,6 +16,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+
+
 func Convert(c *fiber.Ctx) error {
 	// this function need to do:
 	// 1. get request path, query string
@@ -58,6 +60,17 @@ func Convert(c *fiber.Ctx) error {
 	)
 
 	log.Debugf("Incoming connection from %s %s %s", c.IP(), reqHostname, reqURIwithQuery)
+
+	// 新增：检查是否为图片文件
+	if !isImageFile(filename) {
+    log.Infof("Non-image file requested: %s, redirecting to original URL", filename)
+    if proxyMode {
+        return c.Redirect(realRemoteAddr, 302)
+    } else {
+        return c.Redirect(reqURIwithQuery, 302)
+    }
+	}
+
 
 	if !helper.CheckAllowedType(filename) {
 		msg := "File extension not allowed! " + filename
@@ -185,4 +198,16 @@ func Convert(c *fiber.Ctx) error {
 
 	c.Set("X-Compression-Rate", helper.GetCompressionRate(rawImageAbs, finalFilename))
 	return c.SendFile(finalFilename)
+}
+
+// 新增：检查文件是否为图片的辅助函数
+func isImageFile(filename string) bool {
+	ext := strings.ToLower(path.Ext(filename))
+	allowedExtensions := []string{"jpg","png","jpeg","gif","bmp","svg","heic","nef",".webp",".tiff"}
+	for _, allowedExt := range allowedExtensions {
+			if ext == allowedExt {
+					return true
+			}
+	}
+	return false
 }
