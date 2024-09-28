@@ -121,22 +121,36 @@ func fetchRemoteImg(url string, subdir string) config.MetaFile {
 }
 
 func pingURL(url string) string {
-	// this function will try to return identifiable info, currently include etag, content-length as string
-	// anything goes wrong, will return ""
 	var etag, length string
 	resp, err := http.Head(url)
 	if err != nil {
-		log.Errorln("Connection to remote error when pingUrl!")
-		return ""
+			log.Errorf("Connection to remote error when pingUrl: %v", err)
+			return generateFallbackIdentifier(url)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == fiber.StatusOK {
-		etag = resp.Header.Get("etag")
-		length = resp.Header.Get("content-length")
+			etag = resp.Header.Get("ETag")
+			length = resp.Header.Get("Content-Length")
+			
+			if etag == "" {
+					log.Warn("Remote didn't return ETag in header, using Last-Modified if available")
+					etag = resp.Header.Get("Last-Modified")
+			}
+			
+			if etag == "" {
+					log.Warn("Neither ETag nor Last-Modified available, using fallback identifier")
+					etag = generateFallbackIdentifier(url)
+			}
+	} else {
+			log.Warnf("Unexpected status code: %d when pinging URL: %s", resp.StatusCode, url)
+			return generateFallbackIdentifier(url)
 	}
-	if etag == "" {
-		log.Info("Remote didn't return etag in header when getRemoteImageInfo, please check.")
-	}
+
 	return etag + length
+}
+
+func generateFallbackIdentifier(url string) string {
+	// 使用 URL 和当前时间生成一个唯一标识符
+	return "fallback-" + helper.HashString(url + time.Now().String())
 }
