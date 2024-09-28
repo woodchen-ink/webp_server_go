@@ -61,26 +61,34 @@ func Convert(c *fiber.Ctx) error {
 
 	log.Debugf("Incoming connection from %s %s %s", c.IP(), reqHostname, reqURIwithQuery)
 
-	isRedirect := c.Query("webp_redirect") == "true"
-  if !isRedirect {
-		if !isImageFile(filename) {
-				log.Infof("Non-image file requested: %s, redirecting to original URL", filename)
-				var redirectURL string
+	if !isImageFile(filename) {
+		log.Infof("Non-image file requested: %s, redirecting to original URL", filename)
+		var redirectURL string
+
+		// 检查是否存在匹配的 IMG_MAP
+		for prefix, target := range config.Config.ImageMap {
+				if strings.HasPrefix(reqURI, prefix) {
+						// 构造重定向 URL
+						redirectURL = target + strings.TrimPrefix(reqURI, prefix)
+						break
+				}
+		}
+
+		// 如果没有找到匹配的 IMG_MAP，使用默认的处理方式
+		if redirectURL == "" {
 				if proxyMode {
-						// 在代理模式下，使用原始的远程URL
 						redirectURL = realRemoteAddr
 				} else {
-						// 在非代理模式下，构造本地文件的URL
 						redirectURL = path.Join(config.Config.ImgPath, reqURI)
 				}
-				
-				// 移除查询参数，因为它们可能是用于图像处理的
-				redirectURL = strings.Split(redirectURL, "?")[0]
-				
-				log.Infof("Redirecting to: %s", redirectURL)
-				return c.Redirect(redirectURL, 302)
 		}
-}
+
+		// 移除查询参数
+		redirectURL = strings.Split(redirectURL, "?")[0]
+
+		log.Infof("Redirecting to: %s", redirectURL)
+		return c.Redirect(redirectURL, 302)
+	}
 
 
 	if !helper.CheckAllowedType(filename) {
@@ -214,11 +222,22 @@ func Convert(c *fiber.Ctx) error {
 // 新增：检查文件是否为图片的辅助函数
 func isImageFile(filename string) bool {
 	ext := strings.ToLower(path.Ext(filename))
-	allowedExtensions := []string{".jpg",".png",".jpeg",".gif",".bmp",".svg",".heic",".nef",".webp",".tiff"}
-	for _, allowedExt := range allowedExtensions {
-			if ext == allowedExt {
-					return true
-			}
+	if ext == "" {
+			return false
 	}
-	return false
+	ext = ext[1:] // 移除开头的点
+
+	// 使用 config.go 中定义的默认 AllowedTypes
+	defaultImageTypes := config.NewWebPConfig().AllowedTypes
+
+	// 检查配置中的 ALLOWED_TYPES
+	allowedTypes := config.Config.AllowedTypes
+
+	// 如果 ALLOWED_TYPES 包含 "*"，使用默认列表
+	if slices.Contains(allowedTypes, "*") {
+			allowedTypes = defaultImageTypes
+	}
+
+	// 检查文件扩展名是否在允许的类型列表中
+	return slices.Contains(allowedTypes, ext)
 }
