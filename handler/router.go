@@ -214,7 +214,7 @@ func Convert(c *fiber.Ctx) error {
 // 新增：检查文件是否为图片的辅助函数
 func isImageFile(filename string) bool {
 	ext := strings.ToLower(path.Ext(filename))
-	allowedExtensions := []string{"jpg","png","jpeg","gif","bmp","svg","heic","nef",".webp",".tiff"}
+	allowedExtensions := []string{".jpg",".png",".jpeg",".gif",".bmp",".svg",".heic",".nef",".webp",".tiff"}
 	for _, allowedExt := range allowedExtensions {
 			if ext == allowedExt {
 					return true
