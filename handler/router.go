@@ -61,15 +61,26 @@ func Convert(c *fiber.Ctx) error {
 
 	log.Debugf("Incoming connection from %s %s %s", c.IP(), reqHostname, reqURIwithQuery)
 
-	// 新增：检查是否为图片文件
-	if !isImageFile(filename) {
-    log.Infof("Non-image file requested: %s, redirecting to original URL", filename)
-    if proxyMode {
-        return c.Redirect(realRemoteAddr, 302)
-    } else {
-        return c.Redirect(reqURIwithQuery, 302)
-    }
-	}
+	isRedirect := c.Query("webp_redirect") == "true"
+
+  if !isRedirect {
+      if !isImageFile(filename) {
+          log.Infof("Non-image file requested: %s, redirecting to original URL", filename)
+          redirectURL := ""
+          if proxyMode {
+              redirectURL = realRemoteAddr
+          } else {
+              redirectURL = reqURIwithQuery
+          }
+          // 添加标记到重定向 URL
+          if strings.Contains(redirectURL, "?") {
+              redirectURL += "&webp_redirect=true"
+          } else {
+              redirectURL += "?webp_redirect=true"
+          }
+          return c.Redirect(redirectURL, 302)
+      }
+  }
 
 
 	if !helper.CheckAllowedType(filename) {
