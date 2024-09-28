@@ -7,7 +7,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"time"
 	"webp_server_go/config"
 	"webp_server_go/helper"
 
@@ -152,6 +151,7 @@ func pingURL(url string) string {
 }
 
 func generateFallbackIdentifier(url string) string {
-	// 使用 URL 和当前时间生成一个唯一标识符
-	return "fallback-" + helper.HashString(url + time.Now().String())
+	// 使用 URL 的哈希值作为稳定的标识符
+	return "fallback-" + helper.HashString(url)
 }
+
