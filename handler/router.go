@@ -61,35 +61,53 @@ func Convert(c *fiber.Ctx) error {
 
 	log.Debugf("Incoming connection from %s %s %s", c.IP(), reqHostname, reqURIwithQuery)
 
-	if !isImageFile(filename) {
-		log.Infof("Non-image file requested: %s, redirecting to original URL", filename)
-		var redirectURL string
+// 	非图片清况下302到源文件
+// 
+// 
+// 	
+	reqURI := c.Path()
+  filename := path.Base(reqURI)
 
-		// 检查是否存在匹配的 IMG_MAP
-		for prefix, target := range config.Config.ImageMap {
-				if strings.HasPrefix(reqURI, prefix) {
-						// 构造重定向 URL
-						redirectURL = target + strings.TrimPrefix(reqURI, prefix)
-						break
-				}
-		}
+  // 处理根路径请求
+  if reqURI == "/" {
+      // 重定向到一个适当的页面或返回一个默认响应
+      return c.SendString("Welcome to WebP Server")
+  }
 
-		// 如果没有找到匹配的 IMG_MAP，使用默认的处理方式
-		if redirectURL == "" {
-				if proxyMode {
-						redirectURL = realRemoteAddr
-				} else {
-						redirectURL = path.Join(config.Config.ImgPath, reqURI)
-				}
-		}
+  if !isImageFile(filename) {
+      log.Infof("Non-image file requested: %s, redirecting to original URL", reqURI)
+      var redirectURL string
 
-		// 移除查询参数
-		redirectURL = strings.Split(redirectURL, "?")[0]
+      // 检查是否存在匹配的 IMG_MAP
+      for prefix, target := range config.Config.ImageMap {
+          if strings.HasPrefix(reqURI, prefix) {
+              // 构造重定向 URL
+              redirectURL = target + strings.TrimPrefix(reqURI, prefix)
+              break
+      	}
+  		}
 
-		log.Infof("Redirecting to: %s", redirectURL)
-		return c.Redirect(redirectURL, 302)
-	}
+      // 如果没有找到匹配的 IMG_MAP，使用默认的处理方式
+      if redirectURL == "" {
+          if proxyMode {
+              redirectURL = realRemoteAddr
+          } else {
+              // 使用完整的请求路径，而不是追加到 ImgPath
+              redirectURL = path.Join("/", reqURI)
+          }
+      }
 
+      // 确保重定向 URL 不会导致循环
+      if redirectURL == reqURI || redirectURL == path.Join("/", reqURI) {
+          return c.SendStatus(fiber.StatusNotFound)
+      }
+
+      log.Infof("Redirecting to: %s", redirectURL)
+      return c.Redirect(redirectURL, fiber.StatusFound)
+  }
+
+// 
+// 		
 
 	if !helper.CheckAllowedType(filename) {
 		msg := "File extension not allowed! " + filename
@@ -227,17 +245,11 @@ func isImageFile(filename string) bool {
 	}
 	ext = ext[1:] // 移除开头的点
 
-	// 使用 config.go 中定义的默认 AllowedTypes
-	defaultImageTypes := config.NewWebPConfig().AllowedTypes
-
-	// 检查配置中的 ALLOWED_TYPES
 	allowedTypes := config.Config.AllowedTypes
-
-	// 如果 ALLOWED_TYPES 包含 "*"，使用默认列表
-	if slices.Contains(allowedTypes, "*") {
-			allowedTypes = defaultImageTypes
+	if len(allowedTypes) == 1 && allowedTypes[0] == "*" {
+			// 如果允许所有类型，则使用默认的图片类型列表
+			allowedTypes = config.NewWebPConfig().AllowedTypes
 	}
 
-	// 检查文件扩展名是否在允许的类型列表中
 	return slices.Contains(allowedTypes, ext)
 }
