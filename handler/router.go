@@ -23,9 +23,14 @@ func Convert(c *fiber.Ctx) error {
 	// 3. pass it to encoder, get the result, send it back
 
 	// normal http request will start with /
+	// 检查路径是否以 "/" 开头
 	if !strings.HasPrefix(c.Path(), "/") {
-		_ = c.SendStatus(http.StatusBadRequest)
-		return nil
+		return c.SendStatus(http.StatusBadRequest)
+	}
+
+	// 处理根路径请求
+	if c.Path() == "/" {
+		return c.SendString("Welcome to WebP Server")
 	}
 
 	var (
@@ -63,12 +68,6 @@ func Convert(c *fiber.Ctx) error {
 	//
 	//
 	//
-
-	// 处理根路径请求
-	if reqURI == "/" {
-		// 重定向到一个适当的页面或返回一个默认响应
-		return c.SendString("Welcome to WebP Server")
-	}
 
 	if !isImageFile(filename) {
 		log.Infof("Non-image file requested: %s, redirecting to original URL", reqURI)
