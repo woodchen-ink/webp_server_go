@@ -1,7 +1,6 @@
 # 自定义webp-server-go
 
-1. 如果源站没有`etag`, 添加一个默认值, 这是防止很多源站不方便配置;
-2. 如果文件非图片类型, 302重定向到源文件
+1. 如果文件非图片类型, 302重定向到源文件
 
 <p align="center">
 	<img src="./pics/webp_server.png"/>
