@@ -200,3 +200,12 @@ func HashFile(filepath string) string {
 	buf, _ := os.ReadFile(filepath)
 	return fmt.Sprintf("%x", xxhash.Sum64(buf))
 }
+
+// 检查本地文件
+func FileExists(filename string) bool {
+	info, err := os.Stat(filename)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return !info.IsDir()
+}

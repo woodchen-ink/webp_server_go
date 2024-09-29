@@ -70,35 +70,44 @@ func Convert(c *fiber.Ctx) error {
 	//
 
 	if !isImageFile(filename) {
-		log.Infof("Non-image file requested: %s, redirecting to original URL", reqURI)
+		log.Infof("Non-image file requested: %s", reqURI)
 		var redirectURL string
 
 		// 检查是否存在匹配的 IMG_MAP
 		for prefix, target := range config.Config.ImageMap {
 			if strings.HasPrefix(reqURI, prefix) {
-				// 构造重定向 URL
-				redirectURL = target + strings.TrimPrefix(reqURI, prefix)
+				// 检查目标是否为远程资源
+				if strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") {
+					// 远程资源，构造重定向 URL
+					redirectURL = target + strings.TrimPrefix(reqURI, prefix)
+				} else {
+					// 本地资源，按原逻辑处理
+					return c.SendFile(path.Join(target, strings.TrimPrefix(reqURI, prefix)))
+				}
 				break
 			}
 		}
 
-		// 如果没有找到匹配的 IMG_MAP，使用默认的处理方式
+		// 如果没有找到匹配的 IMG_MAP，或者是本地资源，使用默认的处理方式
 		if redirectURL == "" {
 			if proxyMode {
 				redirectURL = realRemoteAddr
 			} else {
-				// 使用完整的请求路径，而不是追加到 ImgPath
-				redirectURL = path.Join("/", reqURI)
+				// 本地资源，按原逻辑处理
+				localPath := path.Join(config.Config.ImgPath, reqURI)
+				if helper.FileExists(localPath) {
+					return c.SendFile(localPath)
+				} else {
+					return c.SendStatus(fiber.StatusNotFound)
+				}
 			}
 		}
 
-		// 确保重定向 URL 不会导致循环
-		if redirectURL == reqURI || redirectURL == path.Join("/", reqURI) {
-			return c.SendStatus(fiber.StatusNotFound)
+		// 只有在确定需要重定向时才执行重定向
+		if redirectURL != "" {
+			log.Infof("Redirecting to: %s", redirectURL)
+			return c.Redirect(redirectURL, fiber.StatusFound)
 		}
-
-		log.Infof("Redirecting to: %s", redirectURL)
-		return c.Redirect(redirectURL, fiber.StatusFound)
 	}
 
 	//
