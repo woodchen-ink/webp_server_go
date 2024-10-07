@@ -6,7 +6,9 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 	"webp_server_go/config"
 	"webp_server_go/helper"
 
@@ -77,67 +79,94 @@ func downloadFile(filepath string, url string) {
 }
 
 func fetchRemoteImg(url string, subdir string) config.MetaFile {
-	// url is https://test.webp.sh/mypic/123.jpg?someother=200&somebugs=200
-	// How do we know if the remote img is changed? we're using hash(etag+length)
-	var etag string
-
 	cacheKey := subdir + ":" + helper.HashString(url)
 
-	if val, found := config.RemoteCache.Get(cacheKey); found {
-		if etagVal, ok := val.(string); ok {
-			log.Infof("Using cache for remote addr: %s", url)
-			etag = etagVal
-		} else {
-			config.RemoteCache.Delete(cacheKey)
-		}
-	}
+	var metadata config.MetaFile
+	var etag string
+	var size int64
+	var lastModified time.Time
 
-	if etag == "" {
+	if cachedETag, found := config.RemoteCache.Get(cacheKey); found {
+		etag = cachedETag.(string)
+		log.Infof("Using cached ETag for remote addr: %s", url)
+	} else {
 		log.Infof("Remote Addr is %s, pinging for info...", url)
-		etag = pingURL(url)
+		etag, size, lastModified = pingURL(url)
 		if etag != "" {
 			config.RemoteCache.Set(cacheKey, etag, cache.DefaultExpiration)
 		}
 	}
 
-	metadata := helper.ReadMetadata(url, etag, subdir)
+	metadata = helper.ReadMetadata(url, etag, subdir)
 	localRawImagePath := path.Join(config.Config.RemoteRawPath, subdir, metadata.Id)
 	localExhaustImagePath := path.Join(config.Config.ExhaustPath, subdir, metadata.Id)
 
-	if !helper.ImageExists(localRawImagePath) || metadata.Checksum != helper.HashString(etag) {
-		cleanProxyCache(localExhaustImagePath)
-		if metadata.Checksum != helper.HashString(etag) {
-			// remote file has changed
-			log.Info("Remote file changed, updating metadata and fetching image source...")
-			helper.DeleteMetadata(url, subdir)
-			helper.WriteMetadata(url, etag, subdir)
+	needUpdate := false
+	if !helper.ImageExists(localRawImagePath) {
+		log.Info("Remote file not found in remote-raw, fetching...")
+		needUpdate = true
+	} else {
+		localFileInfo, err := os.Stat(localRawImagePath)
+		if err == nil {
+			if size > 0 && size != localFileInfo.Size() {
+				log.Info("File size changed, updating...")
+				needUpdate = true
+			} else if !lastModified.IsZero() && lastModified.After(localFileInfo.ModTime()) {
+				log.Info("Remote file is newer, updating...")
+				needUpdate = true
+			} else if metadata.Checksum != helper.HashString(etag) {
+				log.Info("ETag changed, updating...")
+				needUpdate = true
+			}
 		} else {
-			// local file not exists
-			log.Info("Remote file not found in remote-raw, re-fetching...")
+			log.Warnf("Error checking local file: %v", err)
+			needUpdate = true
 		}
-		downloadFile(localRawImagePath, url)
 	}
+
+	if needUpdate {
+		cleanProxyCache(localExhaustImagePath)
+		helper.DeleteMetadata(url, subdir)
+		helper.WriteMetadata(url, etag, subdir)
+		downloadFile(localRawImagePath, url)
+		// 重新读取更新后的元数据
+		metadata = helper.ReadMetadata(url, etag, subdir)
+	}
+
 	return metadata
 }
 
-func pingURL(url string) string {
-	// this function will try to return identifiable info, currently include etag, content-length as string
-	// anything goes wrong, will return ""
-	var etag, length string
+func pingURL(url string) (string, int64, time.Time) {
+	var etag string
+	var size int64
+	var lastModified time.Time
+
 	resp, err := http.Head(url)
 	if err != nil {
-		log.Errorln("Connection to remote error when pingUrl!")
-		return ""
+		log.Errorf("Connection to remote error when pingUrl: %v", err)
+		return "", 0, time.Time{}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == fiber.StatusOK {
-		etag = resp.Header.Get("etag")
-		length = resp.Header.Get("content-length")
-	}
-	if etag == "" {
-		log.Info("Remote didn't return etag in header when getRemoteImageInfo, please check.")
-	}
-	return etag + length
-}
+		etag = resp.Header.Get("ETag")
+		sizeStr := resp.Header.Get("Content-Length")
+		size, _ = strconv.ParseInt(sizeStr, 10, 64)
+		lastModifiedStr := resp.Header.Get("Last-Modified")
+		lastModified, _ = time.Parse(time.RFC1123, lastModifiedStr)
 
+		if etag == "" {
+			log.Warn("Remote didn't return ETag in header, using Last-Modified if available")
+			etag = lastModifiedStr
+		}
+
+		if etag == "" && lastModified.IsZero() {
+			log.Warn("Neither ETag nor Last-Modified available, using Content-Length as fallback")
+			etag = sizeStr
+		}
+	} else {
+		log.Warnf("Unexpected status code: %d when pinging URL: %s", resp.StatusCode, url)
+	}
+
+	return etag, size, lastModified
+}
