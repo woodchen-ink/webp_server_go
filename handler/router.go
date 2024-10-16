@@ -30,7 +30,7 @@ func Convert(c *fiber.Ctx) error {
 
 	// 处理根路径请求
 	if c.Path() == "/" {
-		return c.SendString("Welcome to WebP Server")
+		return c.SendString("Welcome to CZL WebP Server")
 	}
 
 	var (
