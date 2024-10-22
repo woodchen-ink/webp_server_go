@@ -216,13 +216,18 @@ func preProcessImage(img *vips.ImageRef, imageType string, extraParams config.Ex
 
 	// 额外参数处理
 	if config.Config.EnableExtraParams {
-		log.Debug("开始应用额外图像处理参数")
-		if err := resizeImage(img, extraParams); err != nil {
-			log.Errorf("应用额外图像处理参数失败: %v", err)
-			// 这里不设置 shouldCopyOriginal 为 true，因为我们不想在这种情况下复制原图
-			return shouldCopyOriginal, err
+		// 检查是否需要进行尺寸调整
+		if extraParams.MaxWidth != 0 || extraParams.MaxHeight != 0 || extraParams.Width != 0 || extraParams.Height != 0 {
+			log.Debug("开始应用额外图像处理参数")
+			if err := resizeImage(img, extraParams); err != nil {
+				log.Errorf("应用额外图像处理参数失败: %v", err)
+				// 这里不设置 shouldCopyOriginal 为 true，因为我们不想在这种情况下复制原图
+				return shouldCopyOriginal, err
+			}
+			log.Debug("额外图像处理参数应用完成")
+		} else {
+			log.Debug("未设置任何尺寸参数，跳过图像尺寸调整")
 		}
-		log.Debug("额外图像处理参数应用完成")
 	}
 
 	log.Debug("图像预处理完成")
