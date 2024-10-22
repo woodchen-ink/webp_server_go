@@ -238,7 +238,7 @@ func Convert(c *fiber.Ctx) error {
 	}
 
 	if isSmall {
-		log.Infof("文件 %s 小于200KB，跳过转换", rawImageAbs)
+		log.Infof("文件 %s 小于100KB，跳过转换", rawImageAbs)
 		return c.SendFile(rawImageAbs)
 	}
 

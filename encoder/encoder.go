@@ -289,6 +289,12 @@ func convertLog(itype, rawPath string, optimizedPath string, quality int) {
 		log.Error(err)
 		return
 	}
-	log.Infof("%s@%d%%: %s->%s %d->%d %.2f%% deflated", itype, quality,
-		rawPath, optimizedPath, oldf.Size(), newf.Size(), float32(newf.Size())/float32(oldf.Size())*100)
+
+	// 计算压缩率
+	deflateRate := float32(newf.Size()) / float32(oldf.Size()) * 100
+
+	// 记录转换信息
+	log.Infof("图像转换: 类型=%s, 质量=%d%%", itype, quality)
+	log.Infof("文件路径: 原始=%s, 优化=%s", rawPath, optimizedPath)
+	log.Infof("文件大小: 原始=%d字节, 优化=%d字节, 压缩率=%.2f%%", oldf.Size(), newf.Size(), deflateRate)
 }
