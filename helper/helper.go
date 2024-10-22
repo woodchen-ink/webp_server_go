@@ -85,14 +85,14 @@ func ImageExists(filename string) bool {
 	return !info.IsDir()
 }
 
-// func CheckAllowedType(imgFilename string) bool {
-// 	if config.Config.AllowedTypes[0] == "*" {
-// 		return true
-// 	}
-// 	imgFilenameExtension := strings.ToLower(path.Ext(imgFilename))
-// 	imgFilenameExtension = strings.TrimPrefix(imgFilenameExtension, ".") // .jpg -> jpg
-// 	return slices.Contains(config.Config.AllowedTypes, imgFilenameExtension)
-// }
+func CheckAllowedType(imgFilename string) bool {
+	if config.Config.AllowedTypes[0] == "*" {
+		return true
+	}
+	imgFilenameExtension := strings.ToLower(path.Ext(imgFilename))
+	imgFilenameExtension = strings.TrimPrefix(imgFilenameExtension, ".") // .jpg -> jpg
+	return slices.Contains(config.Config.AllowedTypes, imgFilenameExtension)
+}
 
 func GenOptimizedAbsPath(metadata config.MetaFile, subdir string) (string, string, string) {
 	webpFilename := fmt.Sprintf("%s.webp", metadata.Id)

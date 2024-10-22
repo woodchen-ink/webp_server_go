@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"webp_server_go/config"
@@ -22,11 +23,31 @@ func Convert(c *fiber.Ctx) error {
 		return c.SendString("Welcome to CZL WebP Server")
 	}
 
-	// 解析请求 URI 和查询参数
-	reqURI, reqURIwithQuery := parseRequestURI(c)
-	extraParams := parseExtraParams(c)
+	var (
+		reqURIRaw, _          = url.QueryUnescape(c.Path())
+		reqURIwithQueryRaw, _ = url.QueryUnescape(c.OriginalURL())
+		reqURI                = path.Clean(reqURIRaw)
+		reqURIwithQuery       = path.Clean(reqURIwithQueryRaw)
+		filename              = path.Base(reqURI)
+	)
 
 	log.Debugf("Incoming connection from %s %s", c.IP(), reqURIwithQuery)
+
+	// 首先检查是否为图片文件
+	if !isImageFile(filename) {
+		log.Infof("Non-image file requested: %s", reqURI)
+		return handleNonImageFile(c, reqURI)
+	}
+
+	// 检查文件类型是否允许
+	if !helper.CheckAllowedType(filename) {
+		msg := "File extension not allowed! " + filename
+		log.Warn(msg)
+		return c.Status(fiber.StatusBadRequest).SendString(msg)
+	}
+
+	// 解析额外参数
+	extraParams := parseExtraParams(c)
 
 	// 检查路径是否匹配 IMG_MAP 中的任何前缀
 	matchedPrefix, matchedTarget := findMatchingPrefix(reqURI)
@@ -51,6 +72,48 @@ func Convert(c *fiber.Ctx) error {
 	} else {
 		return handleRemoteImage(c, matchedTarget, matchedPrefix, reqURIwithQuery, exhaustFilename, extraParams)
 	}
+}
+
+func handleNonImageFile(c *fiber.Ctx, reqURI string) error {
+	var redirectURL string
+
+	for prefix, target := range config.Config.ImageMap {
+		if strings.HasPrefix(reqURI, prefix) {
+			if strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") {
+				redirectURL = target + strings.TrimPrefix(reqURI, prefix)
+			} else {
+				return c.SendFile(path.Join(target, strings.TrimPrefix(reqURI, prefix)))
+			}
+			break
+		}
+	}
+
+	if redirectURL == "" {
+		localPath := path.Join(config.Config.ImgPath, reqURI)
+		if helper.FileExists(localPath) {
+			return c.SendFile(localPath)
+		} else {
+			return c.SendStatus(fiber.StatusNotFound)
+		}
+	}
+
+	log.Infof("Redirecting to: %s", redirectURL)
+	return c.Redirect(redirectURL, fiber.StatusFound)
+}
+
+func isImageFile(filename string) bool {
+	ext := strings.ToLower(path.Ext(filename))
+	if ext == "" {
+		return false
+	}
+	ext = ext[1:] // 移除开头的点
+
+	allowedTypes := config.Config.AllowedTypes
+	if len(allowedTypes) == 1 && allowedTypes[0] == "*" {
+		allowedTypes = config.NewWebPConfig().AllowedTypes
+	}
+
+	return slices.Contains(allowedTypes, ext)
 }
 
 func parseRequestURI(c *fiber.Ctx) (string, string) {
@@ -95,12 +158,7 @@ func handleLocalImage(c *fiber.Ctx, matchedTarget, reqURI, exhaustFilename strin
 	rawImageAbs := path.Join(matchedTarget, reqURI)
 
 	if !helper.FileExists(rawImageAbs) {
-		return c.Status(fiber.StatusNotFound).SendString("文件不存在")
-	}
-
-	if !helper.IsAllowedImageFile(path.Base(reqURI)) {
-		log.Infof("不允许的文件类型或非图片文件: %s", reqURI)
-		return c.SendFile(rawImageAbs)
+		return c.Status(fiber.StatusNotFound).SendString("本地文件不存在")
 	}
 
 	return processAndSaveImage(c, rawImageAbs, exhaustFilename, extraParams)
@@ -114,12 +172,6 @@ func handleRemoteImage(c *fiber.Ctx, matchedTarget, matchedPrefix, reqURIwithQue
 	}
 
 	realRemoteAddr := buildRealRemoteAddr(targetUrl, matchedPrefix, reqURIwithQuery)
-
-	// 首先检查是否为允许的图片文件
-	if !helper.IsAllowedImageFile(path.Base(reqURIwithQuery)) {
-		log.Infof("不允许的文件类型或非图片文件: %s", reqURIwithQuery)
-		return c.Redirect(realRemoteAddr, 302)
-	}
 
 	rawImageAbs, isNewDownload, err := fetchRemoteImg(realRemoteAddr, targetUrl.Host)
 	if err != nil {
