@@ -79,12 +79,20 @@ func Convert(c *fiber.Ctx) error {
 	// 使用 sync.Once 确保并发安全
 	var once sync.Once
 	var processErr error
+	var fileStatus struct {
+		isAllowed    bool
+		isLocal      bool
+		path         string
+		needRedirect bool
+	}
+
 	processImage := func() {
 		once.Do(func() {
 			// 文件不在 EXHAUST_PATH 中，需要处理
 			isLocalPath := strings.HasPrefix(matchedTarget, "./") || strings.HasPrefix(matchedTarget, "/")
 			var rawImageAbs string
 			var isNewDownload bool
+			var realRemoteAddr string
 
 			if isLocalPath {
 				// 处理本地路径
@@ -114,7 +122,7 @@ func Convert(c *fiber.Ctx) error {
 					reqURIwithQuery = strings.TrimPrefix(reqURIwithQuery, "/")
 				}
 
-				realRemoteAddr := targetHost + reqURIwithQuery
+				realRemoteAddr = targetHost + reqURIwithQuery
 
 				rawImageAbs, isNewDownload, err = fetchRemoteImg(realRemoteAddr, targetHostName)
 				if err != nil {
@@ -127,12 +135,18 @@ func Convert(c *fiber.Ctx) error {
 			// 检查是否为允许的图片文件
 			if !helper.IsAllowedImageFile(filename) {
 				log.Infof("不允许的文件类型或非图片文件: %s", reqURI)
-				// 直接复制文件到 EXHAUST_PATH
-				if err := helper.CopyFile(rawImageAbs, exhaustFilename); err != nil {
-					processErr = fmt.Errorf("复制不允许处理的文件失败: %v", err)
+				fileStatus.isAllowed = false
+				fileStatus.isLocal = isLocalPath
+				if isLocalPath {
+					fileStatus.path = rawImageAbs
+				} else {
+					fileStatus.path = realRemoteAddr
 				}
+				fileStatus.needRedirect = !isLocalPath
 				return
 			}
+
+			fileStatus.isAllowed = true
 
 			// 处理图片
 			isSmall, err := helper.IsFileSizeSmall(rawImageAbs, 30*1024) // 30KB
@@ -176,6 +190,15 @@ func Convert(c *fiber.Ctx) error {
 	if processErr != nil {
 		log.Error(processErr)
 		return c.Status(fiber.StatusInternalServerError).SendString(processErr.Error())
+	}
+
+	// 根据文件状态决定如何响应
+	if !fileStatus.isAllowed {
+		if fileStatus.isLocal {
+			return c.SendFile(fileStatus.path)
+		} else if fileStatus.needRedirect {
+			return c.Redirect(fileStatus.path, 302)
+		}
 	}
 
 	// 再次检查文件是否存在（以防并发情况下的竞态条件）
