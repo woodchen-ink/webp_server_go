@@ -3,7 +3,6 @@ package handler
 import (
 	"fmt"
 	"io"
-	"mime"
 	"net/http"
 	"os"
 	"path"
@@ -125,38 +124,4 @@ func pingURL(url string) (string, int64, time.Time) {
 	}
 
 	return etag, size, lastModified
-}
-
-func streamFile(c *fiber.Ctx, filePath string) error {
-	file, err := os.Open(filePath)
-	if err != nil {
-		log.Errorf("无法打开文件: %s, 错误: %v", filePath, err)
-		return c.Status(fiber.StatusInternalServerError).SendString("无法打开文件")
-	}
-	defer file.Close()
-
-	stat, err := file.Stat()
-	if err != nil {
-		log.Errorf("无法获取文件信息: %s, 错误: %v", filePath, err)
-		return c.Status(fiber.StatusInternalServerError).SendString("无法获取文件信息")
-	}
-
-	contentType := mime.TypeByExtension(path.Ext(filePath))
-	if contentType == "" {
-		contentType = "application/octet-stream"
-	}
-
-	c.Set(fiber.HeaderContentType, contentType)
-	c.Set(fiber.HeaderContentLength, strconv.FormatInt(stat.Size(), 10))
-
-	log.Infof("开始流式传输文件: %s, 大小: %d bytes", filePath, stat.Size())
-
-	err = c.SendStream(file)
-	if err != nil {
-		log.Errorf("文件流式传输失败: %s, 错误: %v", filePath, err)
-		return err
-	}
-
-	log.Infof("文件流式传输完成: %s", filePath)
-	return nil
 }
