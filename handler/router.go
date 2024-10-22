@@ -101,14 +101,22 @@ func Convert(c *fiber.Ctx) error {
 				// 处理远程URL
 				targetUrl, err := url.Parse(matchedTarget)
 				if err != nil {
-					processErr = fmt.Errorf("解析目标 URL 失败: %v", err)
+					processErr = fmt.Errorf("解析目标 URL 失败")
+					log.Errorf("%s: %v", processErr, err)
 					return
 				}
-				remoteAddr := targetUrl.Scheme + "://" + targetUrl.Host + strings.TrimPrefix(reqURI, matchedPrefix)
+
+				// 构建正确的远程地址
+				remoteAddr := targetUrl.String()
+				if !strings.HasSuffix(remoteAddr, "/") {
+					remoteAddr += "/"
+				}
+				remoteAddr += strings.TrimPrefix(reqURI, matchedPrefix)
 
 				rawImageAbs, isNewDownload, err = fetchRemoteImg(remoteAddr, targetUrl.Host)
 				if err != nil {
-					processErr = fmt.Errorf("获取远程图像失败: %v", err)
+					processErr = fmt.Errorf("获取远程图像失败")
+					log.Errorf("%s: %v", processErr, err)
 					return
 				}
 			}
