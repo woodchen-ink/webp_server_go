@@ -63,7 +63,7 @@ func Convert(c *fiber.Ctx) error {
 	}
 
 	// 构建 EXHAUST_PATH 中的文件路径
-	exhaustFilename := path.Join(config.Config.ExhaustPath, strings.TrimPrefix(reqURI, matchedPrefix))
+	exhaustFilename := path.Join(config.Config.ExhaustPath, reqURI)
 	if extraParams.Width > 0 || extraParams.Height > 0 || extraParams.MaxWidth > 0 || extraParams.MaxHeight > 0 {
 		ext := path.Ext(exhaustFilename)
 		extraParamsStr := fmt.Sprintf("_w%d_h%d_mw%d_mh%d", extraParams.Width, extraParams.Height, extraParams.MaxWidth, extraParams.MaxHeight)
@@ -88,8 +88,7 @@ func Convert(c *fiber.Ctx) error {
 
 			if isLocalPath {
 				// 处理本地路径
-				localPath := strings.TrimPrefix(reqURI, matchedPrefix)
-				rawImageAbs = path.Join(matchedTarget, localPath)
+				rawImageAbs = path.Join(matchedTarget, reqURI)
 
 				// 检查本地文件是否存在
 				if !helper.FileExists(rawImageAbs) {
