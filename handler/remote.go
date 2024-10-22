@@ -34,20 +34,26 @@ func cleanProxyCache(cacheImagePath string) {
 func downloadFile(filepath string, url string) error {
 	resp, err := http.Get(url)
 	if err != nil {
-		log.Errorln("下载文件时连接到远程错误！")
+		log.Errorf("下载文件时连接到远程错误！上游链接: %s, 错误: %v", url, err)
 		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != fiber.StatusOK {
-		log.Errorf("获取远程图像时远程返回 %s", resp.Status)
-		return fmt.Errorf("意外的状态: %s", resp.Status)
+		log.Errorf("获取远程图像失败。上游链接: %s, 状态码: %s", url, resp.Status)
+		return fmt.Errorf("意外的状态: %s, 上游链接: %s", resp.Status, url)
 	}
 
 	// 创建目标文件
-	_ = os.MkdirAll(path.Dir(filepath), 0755)
+	err = os.MkdirAll(path.Dir(filepath), 0755)
+	if err != nil {
+		log.Errorf("创建目标目录失败。路径: %s, 错误: %v", path.Dir(filepath), err)
+		return err
+	}
+
 	out, err := os.Create(filepath)
 	if err != nil {
+		log.Errorf("创建目标文件失败。文件路径: %s, 错误: %v", filepath, err)
 		return err
 	}
 	defer out.Close()
@@ -56,26 +62,33 @@ func downloadFile(filepath string, url string) error {
 	buf := make([]byte, 32*1024)
 	_, err = io.CopyBuffer(out, resp.Body, buf)
 	if err != nil {
+		log.Errorf("写入文件失败。文件路径: %s, 上游链接: %s, 错误: %v", filepath, url, err)
 		return err
 	}
 
+	log.Infof("文件下载成功。上游链接: %s, 保存路径: %s", url, filepath)
 	return nil
 }
 
-func fetchRemoteImg(url string, subdir string) config.MetaFile {
-	var metadata config.MetaFile
+func fetchRemoteImg(url, subdir string) (string, bool, error) {
+	log.Infof("正在获取远程图像: %s", url)
 
-	metadata = helper.ReadMetadata(url, "", subdir)
-	localRawImagePath := path.Join(config.Config.RemoteRawPath, subdir, metadata.Id)
+	fileName := helper.HashString(url)
+	localRawImagePath := path.Join(config.Config.RemoteRawPath, subdir, fileName)
 
-	if !helper.ImageExists(localRawImagePath) {
-		log.Info("在远程原始文件中找不到远程文件，正在获取...")
-		downloadFile(localRawImagePath, url)
-		// 重新读取更新后的元数据
-		metadata = helper.WriteMetadata(url, "", subdir)
+	if helper.FileExists(localRawImagePath) {
+		log.Infof("远程图像已存在于本地: %s", localRawImagePath)
+		return localRawImagePath, false, nil
 	}
 
-	return metadata
+	err := downloadFile(localRawImagePath, url)
+	if err != nil {
+		log.Errorf("下载远程图像失败: %v", err)
+		return "", false, err
+	}
+
+	log.Infof("成功获取远程图像: %s", localRawImagePath)
+	return localRawImagePath, true, nil
 }
 
 func pingURL(url string) (string, int64, time.Time) {

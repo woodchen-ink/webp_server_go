@@ -9,6 +9,7 @@ import (
 	"webp_server_go/config"
 	"webp_server_go/encoder"
 	"webp_server_go/helper"
+	"webp_server_go/schedule"
 
 	"github.com/gofiber/fiber/v2"
 	log "github.com/sirupsen/logrus"
@@ -76,16 +77,33 @@ func Convert(c *fiber.Ctx) error {
 	// 文件不在 EXHAUST_PATH 中，需要处理
 	isLocalPath := strings.HasPrefix(matchedTarget, "./") || strings.HasPrefix(matchedTarget, "/")
 	var rawImageAbs string
+	var isNewDownload bool
+
 	if isLocalPath {
 		// 处理本地路径
 		localPath := strings.TrimPrefix(reqURI, matchedPrefix)
 		rawImageAbs = path.Join(matchedTarget, localPath)
+
+		// 检查本地文件是否存在
+		if !helper.FileExists(rawImageAbs) {
+			log.Errorf("本地文件不存在: %s", rawImageAbs)
+			return c.SendStatus(fiber.StatusNotFound)
+		}
+		isNewDownload = false // 本地文件不需要清理
 	} else {
 		// 处理远程URL
-		targetUrl, _ := url.Parse(matchedTarget)
+		targetUrl, err := url.Parse(matchedTarget)
+		if err != nil {
+			log.Errorf("解析目标 URL 失败: %v", err)
+			return c.SendStatus(fiber.StatusInternalServerError)
+		}
 		remoteAddr := targetUrl.Scheme + "://" + targetUrl.Host + strings.Replace(reqURI, matchedPrefix, targetUrl.Path, 1)
-		metadata := fetchRemoteImg(remoteAddr, targetUrl.Host)
-		rawImageAbs = path.Join(config.Config.RemoteRawPath, targetUrl.Host, metadata.Id)
+
+		rawImageAbs, isNewDownload, err = fetchRemoteImg(remoteAddr, targetUrl.Host)
+		if err != nil {
+			log.Errorf("获取远程图像失败: %v", err)
+			return c.SendStatus(fiber.StatusInternalServerError)
+		}
 	}
 
 	// 检查是否为允许的图片文件
@@ -116,6 +134,10 @@ func Convert(c *fiber.Ctx) error {
 			log.Errorf("处理图片失败: %v", err)
 			return c.SendStatus(fiber.StatusInternalServerError)
 		}
+	}
+	// 如果是新下载的远程文件，安排清理任务
+	if !isLocalPath && isNewDownload {
+		go schedule.ScheduleCleanup(rawImageAbs)
 	}
 
 	return c.SendFile(exhaustFilename)

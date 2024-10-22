@@ -111,3 +111,15 @@ func CleanCache() {
 
 	}
 }
+
+var cleanupDelay = 5 * time.Minute
+
+func ScheduleCleanup(filePath string) {
+	time.AfterFunc(cleanupDelay, func() {
+		if err := os.Remove(filePath); err != nil {
+			log.Warnf("清理原始文件失败: %s, 错误: %v", filePath, err)
+		} else {
+			log.Infof("成功清理原始文件: %s", filePath)
+		}
+	})
+}

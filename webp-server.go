@@ -9,6 +9,7 @@ import (
 	"webp_server_go/config"
 	"webp_server_go/encoder"
 	"webp_server_go/handler"
+
 	schedule "webp_server_go/schedule"
 
 	"github.com/gofiber/fiber/v2"
