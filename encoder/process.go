@@ -19,90 +19,110 @@ func resizeImage(img *vips.ImageRef, extraParams config.ExtraParams) error {
 
 	imgHeightWidthRatio := float32(imageHeight) / float32(imageWidth)
 
-	//这里我们有宽度、高度和 max_width、max_height
-	//两对不能同时使用
-
-	//max_height 和 max_width 用于确保将更大的图像调整为 max_height 和 max_width
-	//例如，max_width=200,max_height=100 的 500x500px 图像将调整为 100x100
-	//而较小的图像则保持不变
-
-	//如果两者都使用，我们将使用宽度和高度
+	log.Infof("开始调整图像大小。原始尺寸: %dx%d, 比例: %.2f", imageWidth, imageHeight, imgHeightWidthRatio)
+	log.Infof("请求的参数: MaxWidth=%d, MaxHeight=%d, Width=%d, Height=%d",
+		extraParams.MaxWidth, extraParams.MaxHeight, extraParams.Width, extraParams.Height)
 
 	if extraParams.MaxHeight > 0 && extraParams.MaxWidth > 0 {
-		// If any of it exceeds
 		if imageHeight > extraParams.MaxHeight || imageWidth > extraParams.MaxWidth {
-			// Check which dimension exceeds most
 			heightExceedRatio := float32(imageHeight) / float32(extraParams.MaxHeight)
 			widthExceedRatio := float32(imageWidth) / float32(extraParams.MaxWidth)
-			// 如果高度超过更多，例如 500x500 -> 200x100 (2.5 < 5)
-			// 以max_height为新高度，调整大小并保留比例
 			if heightExceedRatio > widthExceedRatio {
-				err := img.Thumbnail(int(float32(extraParams.MaxHeight)/imgHeightWidthRatio), extraParams.MaxHeight, 0)
+				newWidth := int(float32(extraParams.MaxHeight) / imgHeightWidthRatio)
+				log.Infof("使用MaxHeight调整大小: %dx%d", newWidth, extraParams.MaxHeight)
+				err := img.Thumbnail(newWidth, extraParams.MaxHeight, 0)
 				if err != nil {
+					log.Errorf("调整大小失败: %v", err)
 					return err
 				}
 			} else {
-				err := img.Thumbnail(extraParams.MaxWidth, int(float32(extraParams.MaxWidth)*imgHeightWidthRatio), 0)
+				newHeight := int(float32(extraParams.MaxWidth) * imgHeightWidthRatio)
+				log.Infof("使用MaxWidth调整大小: %dx%d", extraParams.MaxWidth, newHeight)
+				err := img.Thumbnail(extraParams.MaxWidth, newHeight, 0)
 				if err != nil {
+					log.Errorf("调整大小失败: %v", err)
 					return err
 				}
 			}
+		} else {
+			log.Info("图像尺寸在MaxWidth和MaxHeight范围内，无需调整")
 		}
 	}
 
 	if extraParams.MaxHeight > 0 && imageHeight > extraParams.MaxHeight && extraParams.MaxWidth == 0 {
-		err := img.Thumbnail(int(float32(extraParams.MaxHeight)/imgHeightWidthRatio), extraParams.MaxHeight, 0)
+		newWidth := int(float32(extraParams.MaxHeight) / imgHeightWidthRatio)
+		log.Infof("仅使用MaxHeight调整大小: %dx%d", newWidth, extraParams.MaxHeight)
+		err := img.Thumbnail(newWidth, extraParams.MaxHeight, 0)
 		if err != nil {
+			log.Errorf("调整大小失败: %v", err)
 			return err
 		}
 	}
 
 	if extraParams.MaxWidth > 0 && imageWidth > extraParams.MaxWidth && extraParams.MaxHeight == 0 {
-		err := img.Thumbnail(extraParams.MaxWidth, int(float32(extraParams.MaxWidth)*imgHeightWidthRatio), 0)
+		newHeight := int(float32(extraParams.MaxWidth) * imgHeightWidthRatio)
+		log.Infof("仅使用MaxWidth调整大小: %dx%d", extraParams.MaxWidth, newHeight)
+		err := img.Thumbnail(extraParams.MaxWidth, newHeight, 0)
 		if err != nil {
+			log.Errorf("调整大小失败: %v", err)
 			return err
 		}
 	}
 
 	if extraParams.Width > 0 && extraParams.Height > 0 {
-		var cropInteresting vips.Interesting
-		switch config.Config.ExtraParamsCropInteresting {
-		case "InterestingNone":
-			cropInteresting = vips.InterestingNone
-		case "InterestingCentre":
-			cropInteresting = vips.InterestingCentre
-		case "InterestingEntropy":
-			cropInteresting = vips.InterestingEntropy
-		case "InterestingAttention":
-			cropInteresting = vips.InterestingAttention
-		case "InterestingLow":
-			cropInteresting = vips.InterestingLow
-		case "InterestingHigh":
-			cropInteresting = vips.InterestingHigh
-		case "InterestingAll":
-			cropInteresting = vips.InterestingAll
-		default:
-			cropInteresting = vips.InterestingAttention
-		}
-
+		log.Infof("使用指定的Width和Height调整大小: %dx%d", extraParams.Width, extraParams.Height)
+		cropInteresting := getCropInteresting()
 		err := img.Thumbnail(extraParams.Width, extraParams.Height, cropInteresting)
 		if err != nil {
+			log.Errorf("调整大小失败: %v", err)
 			return err
 		}
 	}
+
 	if extraParams.Width > 0 && extraParams.Height == 0 {
-		err := img.Thumbnail(extraParams.Width, int(float32(extraParams.Width)*imgHeightWidthRatio), 0)
+		newHeight := int(float32(extraParams.Width) * imgHeightWidthRatio)
+		log.Infof("仅使用Width调整大小: %dx%d", extraParams.Width, newHeight)
+		err := img.Thumbnail(extraParams.Width, newHeight, 0)
 		if err != nil {
+			log.Errorf("调整大小失败: %v", err)
 			return err
 		}
 	}
+
 	if extraParams.Height > 0 && extraParams.Width == 0 {
-		err := img.Thumbnail(int(float32(extraParams.Height)/imgHeightWidthRatio), extraParams.Height, 0)
+		newWidth := int(float32(extraParams.Height) / imgHeightWidthRatio)
+		log.Infof("仅使用Height调整大小: %dx%d", newWidth, extraParams.Height)
+		err := img.Thumbnail(newWidth, extraParams.Height, 0)
 		if err != nil {
+			log.Errorf("调整大小失败: %v", err)
 			return err
 		}
 	}
+
+	log.Infof("图像调整完成。新尺寸: %dx%d", img.Width(), img.Height())
 	return nil
+}
+
+func getCropInteresting() vips.Interesting {
+	cropInteresting := vips.InterestingAttention
+	switch config.Config.ExtraParamsCropInteresting {
+	case "InterestingNone":
+		cropInteresting = vips.InterestingNone
+	case "InterestingCentre":
+		cropInteresting = vips.InterestingCentre
+	case "InterestingEntropy":
+		cropInteresting = vips.InterestingEntropy
+	case "InterestingAttention":
+		cropInteresting = vips.InterestingAttention
+	case "InterestingLow":
+		cropInteresting = vips.InterestingLow
+	case "InterestingHigh":
+		cropInteresting = vips.InterestingHigh
+	case "InterestingAll":
+		cropInteresting = vips.InterestingAll
+	}
+	log.Infof("使用裁剪策略: %s", config.Config.ExtraParamsCropInteresting)
+	return cropInteresting
 }
 
 func ResizeItself(raw, dest string, extraParams config.ExtraParams) {
