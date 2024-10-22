@@ -231,7 +231,7 @@ func Convert(c *fiber.Ctx) error {
 	}
 
 	// 新增：检查文件大小
-	isSmall, err := helper.IsFileSizeSmall(rawImageAbs, 200*1024) // 200KB
+	isSmall, err := helper.IsFileSizeSmall(rawImageAbs, 100*1024) // 100KB
 	if err != nil {
 		log.Errorf("检查文件大小时出错: %v", err)
 		return c.SendStatus(fiber.StatusInternalServerError)
