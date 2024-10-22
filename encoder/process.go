@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"webp_server_go/config"
+	"webp_server_go/helper"
 
 	"github.com/davidbyttow/govips/v2/vips"
 	log "github.com/sirupsen/logrus"
@@ -207,17 +208,25 @@ func ProcessAndSaveImage(rawImageAbs, exhaustFilename string, extraParams config
 		return err
 	}
 
+	// 获取原图文件大小
+	originalInfo, err := os.Stat(rawImageAbs)
+	if err != nil {
+		log.Errorf("获取原图文件信息失败: %v", err)
+		return err
+	}
+	originalSize := originalInfo.Size()
+
 	// 如果原始图像是 NEF 格式，先转换为 JPG
 	if strings.HasSuffix(strings.ToLower(rawImageAbs), ".nef") {
-		var convertedRaw, converted = ConvertRawToJPG(rawImageAbs, exhaustFilename)
+		tempJPG, converted := ConvertRawToJPG(rawImageAbs, exhaustFilename)
 		if converted {
-			rawImageAbs = convertedRaw
 			defer func() {
-				log.Infoln("移除中间转换文件:", convertedRaw)
-				if err := os.Remove(convertedRaw); err != nil {
+				log.Infoln("移除中间转换文件:", tempJPG)
+				if err := os.Remove(tempJPG); err != nil {
 					log.Warnln("删除转换文件失败", err)
 				}
 			}()
+			rawImageAbs = tempJPG
 		}
 	}
 
@@ -265,6 +274,27 @@ func ProcessAndSaveImage(rawImageAbs, exhaustFilename string, extraParams config
 		return encoderErr
 	}
 
-	log.Infof("图像处理成功: 目标文件=%s", exhaustFilename)
+	// 比较转换后的文件大小
+	convertedInfo, err := os.Stat(exhaustFilename)
+	if err != nil {
+		log.Errorf("获取转换后文件信息失败: %v", err)
+		return err
+	}
+
+	if convertedInfo.Size() > originalSize {
+		log.Infof("转换后的图片大于原图，使用原图: %s", rawImageAbs)
+		// 删除转换后的大文件
+		if err := os.Remove(exhaustFilename); err != nil {
+			log.Warnf("删除大的转换文件失败: %v", err)
+		}
+		// 将原图复制到 EXHAUST_PATH
+		if err := helper.CopyFile(rawImageAbs, exhaustFilename); err != nil {
+			log.Errorf("复制原图到 EXHAUST_PATH 失败: %v", err)
+			return err
+		}
+	} else {
+		log.Infof("图像处理成功: 目标文件=%s", exhaustFilename)
+	}
+
 	return nil
 }
