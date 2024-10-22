@@ -106,12 +106,18 @@ func Convert(c *fiber.Ctx) error {
 					return
 				}
 
-				// 构建正确的远程地址
-				remoteAddr := strings.TrimRight(targetUrl.String(), "/")
-				relativePath := strings.TrimLeft(strings.TrimPrefix(reqURI, matchedPrefix), "/")
-				remoteAddr = remoteAddr + "/" + relativePath
+				targetHostName := targetUrl.Host
+				targetHost := targetUrl.Scheme + "://" + targetUrl.Host
 
-				rawImageAbs, isNewDownload, err = fetchRemoteImg(remoteAddr, targetUrl.Host)
+				// 保留查询参数
+				reqURIwithQuery := strings.Replace(reqURIwithQuery, matchedPrefix, targetUrl.Path, 1)
+				if strings.HasSuffix(targetUrl.Path, "/") {
+					reqURIwithQuery = strings.TrimPrefix(reqURIwithQuery, "/")
+				}
+
+				realRemoteAddr := targetHost + reqURIwithQuery
+
+				rawImageAbs, isNewDownload, err = fetchRemoteImg(realRemoteAddr, targetHostName)
 				if err != nil {
 					processErr = fmt.Errorf("获取远程图像失败")
 					log.Errorf("%s: %v", processErr, err)
