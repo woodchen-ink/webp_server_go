@@ -12,7 +12,6 @@ import (
 	schedule "webp_server_go/schedule"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/etag"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	log "github.com/sirupsen/logrus"
@@ -103,9 +102,6 @@ func main() {
 	if config.Prefetch {
 		go encoder.PrefetchImages()
 	}
-	app.Use(etag.New(etag.Config{
-		Weak: true,
-	}))
 
 	listenAddress := config.Config.Host + ":" + config.Config.Port
 

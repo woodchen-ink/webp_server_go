@@ -199,6 +199,8 @@ func preProcessImage(img *vips.ImageRef, imageType string, extraParams config.Ex
 }
 
 func ProcessAndSaveImage(rawImageAbs, exhaustFilename string, extraParams config.ExtraParams) error {
+	log.Infof("开始处理图像: 源文件=%s, 目标文件=%s", rawImageAbs, exhaustFilename)
+
 	// 创建目标目录
 	if err := os.MkdirAll(path.Dir(exhaustFilename), 0755); err != nil {
 		log.Errorf("创建目标目录失败: %v", err)
@@ -227,22 +229,29 @@ func ProcessAndSaveImage(rawImageAbs, exhaustFilename string, extraParams config
 		img.RemoveMetadata()
 	}
 
+	var buf []byte
+	var exportErr error
+
 	// 确定输出格式
-	outputFormat := vips.ImageTypeWebP // 默认使用 WebP
 	if strings.HasSuffix(exhaustFilename, ".avif") {
-		outputFormat = vips.ImageTypeAVIF
+		buf, _, exportErr = img.ExportAvif(vips.AvifExportParams{
+			Quality: config.Config.Quality,
+		})
 	} else if strings.HasSuffix(exhaustFilename, ".jxl") {
-		outputFormat = vips.ImageTypeJPEG // 假设 JXL 不直接支持，使用 JPEG
+		// 注意：govips 可能不直接支持 JXL 导出，这里使用 JPEG 作为替代
+		buf, _, exportErr = img.ExportJpeg(vips.JpegExportParams{
+			Quality: config.Config.Quality,
+		})
+	} else {
+		// 默认使用 WebP
+		buf, _, exportErr = img.ExportWebp(vips.WebpExportParams{
+			Quality: config.Config.Quality,
+		})
 	}
 
-	// 导出图像
-	buf, _, err := img.Export(vips.ExportParams{
-		Format:  outputFormat,
-		Quality: config.Config.Quality,
-	})
-	if err != nil {
-		log.Errorf("导出图像失败: %v", err)
-		return err
+	if exportErr != nil {
+		log.Errorf("导出图像失败: %v", exportErr)
+		return exportErr
 	}
 
 	// 写入文件
