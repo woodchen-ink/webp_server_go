@@ -166,7 +166,7 @@ func LoadConfig() {
 	if os.Getenv("WEBP_QUALITY") != "" {
 		quality, err := strconv.Atoi(os.Getenv("WEBP_QUALITY"))
 		if err != nil {
-			log.Warnf("WEBP_QUALITY is not a valid integer, using value in config.json %d", Config.Quality)
+			log.Warnf("WEBP_QUALITY 不是有效的整数，使用 config.json 中的值 %d", Config.Quality)
 		} else {
 			Config.Quality = quality
 		}
@@ -199,7 +199,7 @@ func LoadConfig() {
 		} else if enableExtraParams == "false" {
 			Config.EnableExtraParams = false
 		} else {
-			log.Warnf("WEBP_ENABLE_EXTRA_PARAMS is not a valid boolean, using value in config.json %t", Config.EnableExtraParams)
+			log.Warnf("WEBP_ENABLE_EXTRA_PARAMS 不是有效的布尔值，使用 config.json 中的值 %t", Config.EnableExtraParams)
 		}
 	}
 	if os.Getenv("WEBP_EXTRA_PARAMS_CROP_INTERESTING") != "" {
@@ -207,7 +207,7 @@ func LoadConfig() {
 		if slices.Contains(availableInteresting, os.Getenv("WEBP_EXTRA_PARAMS_CROP_INTERESTING")) {
 			Config.ExtraParamsCropInteresting = os.Getenv("WEBP_EXTRA_PARAMS_CROP_INTERESTING")
 		} else {
-			log.Warnf("WEBP_EXTRA_PARAMS_CROP_INTERESTING is not a valid interesting, using value in config.json %s", Config.ExtraParamsCropInteresting)
+			log.Warnf("WEBP_EXTRA_PARAMS_CROP_INTERESTING 不是有效的兴趣，使用 config.json 中的值 %s", Config.ExtraParamsCropInteresting)
 		}
 	}
 
@@ -218,7 +218,7 @@ func LoadConfig() {
 		} else if stripMetadata == "false" {
 			Config.StripMetadata = false
 		} else {
-			log.Warnf("WEBP_STRIP_METADATA is not a valid boolean, using value in config.json %t", Config.StripMetadata)
+			log.Warnf("WEBP_STRIP_METADATA 不是有效的布尔值，使用 config.json 中的值 %t", Config.StripMetadata)
 		}
 	}
 	if os.Getenv("WEBP_IMG_MAP") != "" {
@@ -227,7 +227,7 @@ func LoadConfig() {
 	if os.Getenv("WEBP_READ_BUFFER_SIZE") != "" {
 		readBufferSize, err := strconv.Atoi(os.Getenv("WEBP_READ_BUFFER_SIZE"))
 		if err != nil {
-			log.Warnf("WEBP_READ_BUFFER_SIZE is not a valid integer, using value in config.json %d", Config.ReadBufferSize)
+			log.Warnf("WEBP_READ_BUFFER_SIZE 不是有效的整数，使用 config.json 中的值 %d", Config.ReadBufferSize)
 		} else {
 			Config.ReadBufferSize = readBufferSize
 		}
@@ -235,7 +235,7 @@ func LoadConfig() {
 	if os.Getenv("WEBP_CONCURRENCY") != "" {
 		concurrency, err := strconv.Atoi(os.Getenv("WEBP_CONCURRENCY"))
 		if err != nil {
-			log.Warnf("WEBP_CONCURRENCY is not a valid integer, using value in config.json %d", Config.Concurrency)
+			log.Warnf("WEBP_CONCURRENCY 不是有效的整数，使用 config.json 中的值 %d", Config.Concurrency)
 		} else {
 			Config.Concurrency = concurrency
 		}

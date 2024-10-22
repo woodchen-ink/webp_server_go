@@ -111,7 +111,7 @@ func Convert(c *fiber.Ctx) error {
 
 	// 新增：检查是否为WebP格式
 	if strings.ToLower(path.Ext(filename)) == ".webp" {
-		log.Infof("Original image is already in WebP format: %s", reqURI)
+		log.Infof("原始图像已经是WebP格式: %s", reqURI)
 		var webpImagePath string
 		if proxyMode {
 			// 对于代理模式，确保文件已经被下载
@@ -138,7 +138,7 @@ func Convert(c *fiber.Ctx) error {
 
 	// Rewrite the target backend if a mapping rule matches the hostname
 	if hostMap, hostMapFound := config.Config.ImageMap[reqHost]; hostMapFound {
-		log.Debugf("Found host mapping %s -> %s", reqHostname, hostMap)
+		log.Debugf("找到host映射 %s -> %s", reqHostname, hostMap)
 		targetHostUrl, _ := url.Parse(hostMap)
 		targetHostName = targetHostUrl.Host
 		targetHost = targetHostUrl.Scheme + "://" + targetHostUrl.Host
@@ -148,7 +148,7 @@ func Convert(c *fiber.Ctx) error {
 		httpRegexpMatcher := regexp.MustCompile(config.HttpRegexp)
 		for uriMap, uriMapTarget := range config.Config.ImageMap {
 			if strings.HasPrefix(reqURI, uriMap) {
-				log.Debugf("Found URI mapping %s -> %s", uriMap, uriMapTarget)
+				log.Debugf("找到 URI 映射 %s -> %s", uriMap, uriMapTarget)
 				mapMode = true
 
 				// if uriMapTarget we use the proxy mode to fetch the remote

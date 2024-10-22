@@ -40,7 +40,7 @@ func ReadMetadata(p, etag string, subdir string) config.MetaFile {
 	} else {
 		err = json.Unmarshal(buf, &metadata)
 		if err != nil {
-			log.Warnf("unmarshal metadata error, possible corrupt file, re-building...: %s", err)
+			log.Warnf("解组元数据错误、可能损坏的文件、重建...: %s", err)
 			WriteMetadata(p, etag, subdir)
 			return ReadMetadata(p, etag, subdir)
 		}
@@ -75,6 +75,6 @@ func DeleteMetadata(p string, subdir string) {
 	metadataPath := path.Join(config.Config.MetadataPath, subdir, id+".json")
 	err := os.Remove(metadataPath)
 	if err != nil {
-		log.Warnln("failed to delete metadata", err)
+		log.Warnln("删除元数据失败", err)
 	}
 }
