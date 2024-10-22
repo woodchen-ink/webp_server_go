@@ -31,6 +31,8 @@
    * 使用流式JSON编码器
    * 内存使用监控
 6. 根目录设置打招呼
+7. 移除`IMG_PATH`的配置方式, 只保留`IMG_MAP`.
+8. 当前缀与`IMG_MAP`不匹配时, 直接返回错误
 
 <p align="center">
 	<img src="./pics/webp_server.png"/>

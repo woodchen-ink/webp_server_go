@@ -137,7 +137,7 @@ func LoadConfig() {
 	decoder := json.NewDecoder(jsonObject)
 	_ = decoder.Decode(&Config)
 	_ = jsonObject.Close()
-	switchProxyMode()
+
 	Config.ImageMap = parseImgMap(Config.ImageMap)
 
 	if slices.Contains(Config.ConvertTypes, "webp") {
@@ -282,12 +282,12 @@ func parseImgMap(imgMap map[string]string) map[string]string {
 	var parsedImgMap = map[string]string{}
 	httpRegexpMatcher := regexp.MustCompile(HttpRegexp)
 	for uriMap, uriMapTarget := range imgMap {
-		if httpRegexpMatcher.Match([]byte(uriMap)) || strings.HasPrefix(uriMap, "/") {
+		if httpRegexpMatcher.Match([]byte(uriMapTarget)) || strings.HasPrefix(uriMap, "/") {
 			// Valid
 			parsedImgMap[uriMap] = uriMapTarget
 		} else {
 			// Invalid
-			log.Warnf("IMG_MAP key '%s' does matches '%s' or starts with '/' - skipped", uriMap, HttpRegexp)
+			log.Warnf("IMG_MAP 值'%s'与'%s'不匹配或键不以“/”开头 -已跳过", uriMapTarget, HttpRegexp)
 		}
 	}
 	return parsedImgMap
@@ -298,13 +298,4 @@ type ExtraParams struct {
 	Height    int // in px
 	MaxWidth  int // in px
 	MaxHeight int // in px
-}
-
-func switchProxyMode() {
-	matched, _ := regexp.MatchString(HttpRegexp, Config.ImgPath)
-	if matched {
-		// Enable proxy based on ImgPath should be deprecated in future versions
-		log.Warn("Enable proxy based on ImgPath will be deprecated in future versions. Use IMG_MAP config options instead")
-		ProxyMode = true
-	}
 }
