@@ -35,26 +35,26 @@ func downloadFile(filepath string, url string) error {
 	resp, err := http.Get(url)
 	if err != nil {
 		log.Errorf("下载文件时连接到远程错误！上游链接: %s, 错误: %v", url, err)
-		return err
+		return fmt.Errorf("无法连接到远程服务器")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != fiber.StatusOK {
 		log.Errorf("获取远程图像失败。上游链接: %s, 状态码: %s", url, resp.Status)
-		return fmt.Errorf("意外的状态: %s, 上游链接: %s", resp.Status, url)
+		return fmt.Errorf("远程服务器返回非预期状态")
 	}
 
 	// 创建目标文件
 	err = os.MkdirAll(path.Dir(filepath), 0755)
 	if err != nil {
 		log.Errorf("创建目标目录失败。路径: %s, 错误: %v", path.Dir(filepath), err)
-		return err
+		return fmt.Errorf("无法创建目标目录")
 	}
 
 	out, err := os.Create(filepath)
 	if err != nil {
 		log.Errorf("创建目标文件失败。文件路径: %s, 错误: %v", filepath, err)
-		return err
+		return fmt.Errorf("无法创建目标文件")
 	}
 	defer out.Close()
 
@@ -63,7 +63,7 @@ func downloadFile(filepath string, url string) error {
 	_, err = io.CopyBuffer(out, resp.Body, buf)
 	if err != nil {
 		log.Errorf("写入文件失败。文件路径: %s, 上游链接: %s, 错误: %v", filepath, url, err)
-		return err
+		return fmt.Errorf("写入文件时发生错误")
 	}
 
 	log.Infof("文件下载成功。上游链接: %s, 保存路径: %s", url, filepath)
@@ -83,8 +83,8 @@ func fetchRemoteImg(url, subdir string) (string, bool, error) {
 
 	err := downloadFile(localRawImagePath, url)
 	if err != nil {
-		log.Errorf("下载远程图像失败: %v", err)
-		return "", false, err
+		log.Errorf("下载远程图像失败。URL: %s, 错误: %v", url, err)
+		return "", false, fmt.Errorf("下载远程图像失败")
 	}
 
 	log.Infof("成功获取远程图像: %s", localRawImagePath)
