@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"time"
 	"webp_server_go/config"
 	"webp_server_go/encoder"
 	"webp_server_go/handler"
@@ -81,6 +82,20 @@ func init() {
 	setupLogger()
 }
 
+func monitorMemoryUsage() {
+	ticker := time.NewTicker(1 * time.Minute)
+	for range ticker.C {
+		var m runtime.MemStats
+		runtime.ReadMemStats(&m)
+		log.Infof("Alloc = %v MiB, TotalAlloc = %v MiB, Sys = %v MiB, NumGC = %v",
+			bToMb(m.Alloc), bToMb(m.TotalAlloc), bToMb(m.Sys), m.NumGC)
+	}
+}
+
+func bToMb(b uint64) uint64 {
+	return b / 1024 / 1024
+}
+
 func main() {
 	if config.Config.MaxCacheSize != 0 {
 		go schedule.CleanCache()
@@ -96,6 +111,8 @@ func main() {
 
 	app.Get("/healthz", handler.Healthz)
 	app.Get("/*", handler.Convert)
+
+	go monitorMemoryUsage()
 
 	fmt.Println("WebP Server Go is Running on http://" + listenAddress)
 
