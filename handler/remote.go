@@ -42,7 +42,7 @@ func downloadFile(filepath string, url string) error {
 
 	if resp.StatusCode != fiber.StatusOK {
 		log.Errorf("获取远程图像时远程返回 %s", resp.Status)
-		return fmt.Errorf("unexpected status: %s", resp.Status)
+		return fmt.Errorf("意外的状态: %s", resp.Status)
 	}
 
 	// 创建目标文件

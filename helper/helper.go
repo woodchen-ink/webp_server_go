@@ -180,7 +180,7 @@ func FindSmallestFiles(files []string) string {
 	for _, f := range files {
 		stat, err := os.Stat(f)
 		if err != nil {
-			log.Warnf("%s not found on filesystem", f)
+			log.Warnf("在文件系统上找不到 %s", f)
 			continue
 		}
 		if stat.Size() < small || small == 0 {

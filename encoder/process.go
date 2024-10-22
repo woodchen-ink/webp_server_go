@@ -17,14 +17,14 @@ func resizeImage(img *vips.ImageRef, extraParams config.ExtraParams) error {
 
 	imgHeightWidthRatio := float32(imageHeight) / float32(imageWidth)
 
-	// Here we have width, height and max_width, max_height
-	// Both pairs cannot be used at the same time
+	//这里我们有宽度、高度和 max_width、max_height
+	//两对不能同时使用
 
-	// max_height and max_width are used to make sure bigger images are resized to max_height and max_width
-	// e.g, 500x500px image with max_width=200,max_height=100 will be resized to 100x100
-	// while smaller images are untouched
+	//max_height 和 max_width 用于确保将更大的图像调整为 max_height 和 max_width
+	//例如，max_width=200,max_height=100 的 500x500px 图像将调整为 100x100
+	//而较小的图像则保持不变
 
-	// If both are used, we will use width and height
+	//如果两者都使用，我们将使用宽度和高度
 
 	if extraParams.MaxHeight > 0 && extraParams.MaxWidth > 0 {
 		// If any of it exceeds
@@ -32,8 +32,8 @@ func resizeImage(img *vips.ImageRef, extraParams config.ExtraParams) error {
 			// Check which dimension exceeds most
 			heightExceedRatio := float32(imageHeight) / float32(extraParams.MaxHeight)
 			widthExceedRatio := float32(imageWidth) / float32(extraParams.MaxWidth)
-			// If height exceeds more, like 500x500 -> 200x100 (2.5 < 5)
-			// Take max_height as new height ,resize and retain ratio
+			// 如果高度超过更多，例如 500x500 -> 200x100 (2.5 < 5)
+			// 以max_height为新高度，调整大小并保留比例
 			if heightExceedRatio > widthExceedRatio {
 				err := img.Thumbnail(int(float32(extraParams.MaxHeight)/imgHeightWidthRatio), extraParams.MaxHeight, 0)
 				if err != nil {
@@ -104,65 +104,95 @@ func resizeImage(img *vips.ImageRef, extraParams config.ExtraParams) error {
 }
 
 func ResizeItself(raw, dest string, extraParams config.ExtraParams) {
-	log.Infof("Resize %s itself to %s", raw, dest)
+	log.Infof("开始调整图像大小: 源文件=%s, 目标文件=%s", raw, dest)
 
-	// we need to create dir first
-	var err = os.MkdirAll(path.Dir(dest), 0755)
-	if err != nil {
-		log.Error(err.Error())
+	// 创建目标目录
+	if err := os.MkdirAll(path.Dir(dest), 0755); err != nil {
+		log.Errorf("创建目标目录失败: %v", err)
+		return
 	}
 
+	// 加载图像
 	img, err := vips.LoadImageFromFile(raw, &vips.ImportParams{
 		FailOnError: boolFalse,
 	})
 	if err != nil {
-		log.Warnf("Could not load %s: %s", raw, err)
+		log.Warnf("加载图像失败: 文件=%s, 错误=%v", raw, err)
 		return
 	}
-	_ = resizeImage(img, extraParams)
+	defer img.Close()
+
+	// 调整图像大小
+	if err := resizeImage(img, extraParams); err != nil {
+		log.Warnf("调整图像大小失败: %v", err)
+		return
+	}
+
+	// 移除元数据（如果配置要求）
 	if config.Config.StripMetadata {
+		log.Debug("正在移除图像元数据")
 		img.RemoveMetadata()
 	}
-	buf, _, _ := img.ExportNative()
-	_ = os.WriteFile(dest, buf, 0600)
-	img.Close()
+
+	// 导出图像
+	buf, _, err := img.ExportNative()
+	if err != nil {
+		log.Errorf("导出图像失败: %v", err)
+		return
+	}
+
+	// 写入文件
+	if err := os.WriteFile(dest, buf, 0600); err != nil {
+		log.Errorf("写入目标文件失败: 文件=%s, 错误=%v", dest, err)
+		return
+	}
+
+	log.Infof("图像大小调整成功: 目标文件=%s", dest)
 }
 
 // Pre-process image(auto rotate, resize, etc.)
 func preProcessImage(img *vips.ImageRef, imageType string, extraParams config.ExtraParams) error {
-	// Check Width/Height and ignore image formats
+	log.Debugf("开始预处理图像: 类型=%s, 宽度=%d, 高度=%d", imageType, img.Metadata().Width, img.Metadata().Height)
+
+	// 检查宽度/高度并忽略特定图像格式
 	switch imageType {
 	case "webp":
 		if img.Metadata().Width > config.WebpMax || img.Metadata().Height > config.WebpMax {
+			log.Warnf("WebP图像尺寸超限: 宽度=%d, 高度=%d, 最大限制=%d", img.Metadata().Width, img.Metadata().Height, config.WebpMax)
 			return errors.New("WebP：图像太大")
 		}
-		imageFormat := img.Format()
-		if slices.Contains(webpIgnore, imageFormat) {
-			// Return err to render original image
+		if slices.Contains(webpIgnore, img.Format()) {
+			log.Infof("WebP编码器忽略图像类型: %s", img.Format())
 			return errors.New("WebP 编码器：忽略图像类型")
 		}
 	case "avif":
 		if img.Metadata().Width > config.AvifMax || img.Metadata().Height > config.AvifMax {
+			log.Warnf("AVIF图像尺寸超限: 宽度=%d, 高度=%d, 最大限制=%d", img.Metadata().Width, img.Metadata().Height, config.AvifMax)
 			return errors.New("AVIF：图像太大")
 		}
-		imageFormat := img.Format()
-		if slices.Contains(avifIgnore, imageFormat) {
-			// Return err to render original image
+		if slices.Contains(avifIgnore, img.Format()) {
+			log.Infof("AVIF编码器忽略图像类型: %s", img.Format())
 			return errors.New("AVIF 编码器：忽略图像类型")
 		}
 	}
 
-	// Auto rotate
-	err := img.AutoRotate()
-	if err != nil {
+	// 自动旋转
+	if err := img.AutoRotate(); err != nil {
+		log.Errorf("图像自动旋转失败: %v", err)
 		return err
 	}
+	log.Debug("图像自动旋转完成")
+
+	// 额外参数处理
 	if config.Config.EnableExtraParams {
-		err = resizeImage(img, extraParams)
-		if err != nil {
+		log.Debug("开始应用额外图像处理参数")
+		if err := resizeImage(img, extraParams); err != nil {
+			log.Errorf("应用额外图像处理参数失败: %v", err)
 			return err
 		}
+		log.Debug("额外图像处理参数应用完成")
 	}
 
+	log.Debug("图像预处理完成")
 	return nil
 }

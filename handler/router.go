@@ -108,25 +108,6 @@ func Convert(c *fiber.Ctx) error {
 		}
 	}
 
-	// 新增：检查是否为WebP格式
-	// if strings.ToLower(path.Ext(filename)) == ".webp" {
-	// 	log.Infof("原始图像已经是WebP格式: %s", reqURI)
-	// 	var webpImagePath string
-	// 	if proxyMode {
-	// 		// 对于代理模式，确保文件已经被下载
-	// 		metadata = fetchRemoteImg(realRemoteAddr, targetHostName)
-	// 		webpImagePath = path.Join(config.Config.RemoteRawPath, targetHostName, metadata.Id)
-	// 	} else {
-	// 		webpImagePath = path.Join(config.Config.ImgPath, reqURI)
-	// 	}
-
-	// 	// 检查文件是否存在
-	// 	if helper.FileExists(webpImagePath) {
-	// 		// 直接返回原WebP图片
-	// 		return c.SendFile(webpImagePath)
-	// 	}
-	// }
-
 	if !helper.CheckAllowedType(filename) {
 		msg := "不允许的文件扩展名 " + filename
 		log.Warn(msg)
@@ -220,7 +201,7 @@ func Convert(c *fiber.Ctx) error {
 		return c.SendFile(dest)
 	}
 
-	// Check the original image for existence,
+	// 检查原始图像是否存在,
 	if !helper.ImageExists(rawImageAbs) {
 		helper.DeleteMetadata(reqURIwithQuery, targetHostName)
 		msg := "Image not found!"
