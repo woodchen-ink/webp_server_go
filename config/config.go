@@ -282,12 +282,12 @@ func parseImgMap(imgMap map[string]string) map[string]string {
 	var parsedImgMap = map[string]string{}
 	httpRegexpMatcher := regexp.MustCompile(HttpRegexp)
 	for uriMap, uriMapTarget := range imgMap {
-		if httpRegexpMatcher.Match([]byte(uriMapTarget)) || strings.HasPrefix(uriMap, "/") {
-			// Valid
+		if httpRegexpMatcher.Match([]byte(uriMapTarget)) || strings.HasPrefix(uriMapTarget, "./") || strings.HasPrefix(uriMapTarget, "/") {
+			// Valid: remote URL or local path
 			parsedImgMap[uriMap] = uriMapTarget
 		} else {
 			// Invalid
-			log.Warnf("IMG_MAP 值'%s'与'%s'不匹配或键不以“/”开头 -已跳过", uriMapTarget, HttpRegexp)
+			log.Warnf("IMG_MAP 值'%s'不是有效的远程 URL 或本地路径 -已跳过", uriMapTarget)
 		}
 	}
 	return parsedImgMap

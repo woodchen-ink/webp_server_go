@@ -65,23 +65,50 @@ func Convert(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusNotFound)
 	}
 
-	// 设置目标主机信息
-	targetUrl, _ := url.Parse(matchedTarget)
-	targetHostName = targetUrl.Host
-	targetHost = targetUrl.Scheme + "://" + targetUrl.Host
+	isLocalPath := strings.HasPrefix(matchedTarget, "./") || strings.HasPrefix(matchedTarget, "/")
 
-	// 调整请求 URI
-	reqURI = strings.Replace(reqURI, matchedPrefix, targetUrl.Path, 1)
-	reqURIwithQuery = strings.Replace(reqURIwithQuery, matchedPrefix, targetUrl.Path, 1)
+	var rawImageAbs string
+	var metadata config.MetaFile
 
-	// 构造远程地址
-	realRemoteAddr = targetHost + reqURIwithQuery
+	if isLocalPath {
+		// 处理本地路径
+		localPath := strings.TrimPrefix(reqURI, matchedPrefix)
+		rawImageAbs = path.Join(matchedTarget, localPath)
+
+		if !helper.FileExists(rawImageAbs) {
+			log.Warnf("本地文件不存在: %s", rawImageAbs)
+			return c.SendStatus(fiber.StatusNotFound)
+		}
+
+		// 为本地文件创建或获取元数据
+		metadata = helper.ReadMetadata(reqURIwithQuery, "", reqHostname)
+		if metadata.Checksum != helper.HashFile(rawImageAbs) {
+			log.Info("本地文件已更改，更新元数据...")
+			helper.WriteMetadata(reqURIwithQuery, "", reqHostname)
+		}
+	} else {
+		// 处理远程URL
+		targetUrl, _ := url.Parse(matchedTarget)
+		targetHostName = targetUrl.Host
+		targetHost = targetUrl.Scheme + "://" + targetUrl.Host
+		reqURI = strings.Replace(reqURI, matchedPrefix, targetUrl.Path, 1)
+		reqURIwithQuery = strings.Replace(reqURIwithQuery, matchedPrefix, targetUrl.Path, 1)
+		realRemoteAddr = targetHost + reqURIwithQuery
+
+		// 获取远程图像元数据
+		metadata = fetchRemoteImg(realRemoteAddr, targetHostName)
+		rawImageAbs = path.Join(config.Config.RemoteRawPath, targetHostName, metadata.Id)
+	}
 
 	// 处理非图片文件
 	if !helper.IsImageFile(filename) {
 		log.Infof("Non-image file requested: %s", reqURI)
-		log.Infof("Redirecting to: %s", realRemoteAddr)
-		return c.Redirect(realRemoteAddr, fiber.StatusFound)
+		if isLocalPath {
+			return c.SendFile(rawImageAbs)
+		} else {
+			log.Infof("Redirecting to: %s", realRemoteAddr)
+			return c.Redirect(realRemoteAddr, fiber.StatusFound)
+		}
 	}
 
 	// 检查允许的文件类型
@@ -90,10 +117,6 @@ func Convert(c *fiber.Ctx) error {
 		log.Warn(msg)
 		return c.Status(http.StatusBadRequest).SendString(msg)
 	}
-
-	// 获取远程图像元数据
-	metadata := fetchRemoteImg(realRemoteAddr, targetHostName)
-	rawImageAbs := path.Join(config.Config.RemoteRawPath, targetHostName, metadata.Id)
 
 	// 后续的图像处理逻辑
 	supportedFormats := helper.GuessSupportedFormat(reqHeader)
