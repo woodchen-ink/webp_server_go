@@ -7,7 +7,6 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"sync"
 	"webp_server_go/config"
 	"webp_server_go/encoder"
 	"webp_server_go/helper"
@@ -23,52 +22,21 @@ func Convert(c *fiber.Ctx) error {
 		return c.SendString("Welcome to CZL WebP Server")
 	}
 
-	var (
-		reqURIRaw, _          = url.QueryUnescape(c.Path())
-		reqURIwithQueryRaw, _ = url.QueryUnescape(c.OriginalURL())
-		reqURI                = path.Clean(reqURIRaw)
-		reqURIwithQuery       = path.Clean(reqURIwithQueryRaw)
-
-		filename = path.Base(reqURI)
-
-		width, _     = strconv.Atoi(c.Query("width"))
-		height, _    = strconv.Atoi(c.Query("height"))
-		maxHeight, _ = strconv.Atoi(c.Query("max_height"))
-		maxWidth, _  = strconv.Atoi(c.Query("max_width"))
-		extraParams  = config.ExtraParams{
-			Width:     width,
-			Height:    height,
-			MaxWidth:  maxWidth,
-			MaxHeight: maxHeight,
-		}
-	)
+	// 解析请求 URI 和查询参数
+	reqURI, reqURIwithQuery := parseRequestURI(c)
+	extraParams := parseExtraParams(c)
 
 	log.Debugf("Incoming connection from %s %s", c.IP(), reqURIwithQuery)
 
 	// 检查路径是否匹配 IMG_MAP 中的任何前缀
-	var matchedPrefix string
-	var matchedTarget string
-	for prefix, target := range config.Config.ImageMap {
-		if strings.HasPrefix(reqURI, prefix) {
-			matchedPrefix = prefix
-			matchedTarget = target
-			break
-		}
-	}
-
-	// 如果不匹配任何 IMG_MAP 前缀，直接返回 404
+	matchedPrefix, matchedTarget := findMatchingPrefix(reqURI)
 	if matchedPrefix == "" {
 		log.Warnf("请求的路径不匹配任何配置的 IMG_MAP: %s", c.Path())
 		return c.SendStatus(fiber.StatusNotFound)
 	}
 
 	// 构建 EXHAUST_PATH 中的文件路径
-	exhaustFilename := path.Join(config.Config.ExhaustPath, reqURI)
-	if extraParams.Width > 0 || extraParams.Height > 0 || extraParams.MaxWidth > 0 || extraParams.MaxHeight > 0 {
-		ext := path.Ext(exhaustFilename)
-		extraParamsStr := fmt.Sprintf("_w%d_h%d_mw%d_mh%d", extraParams.Width, extraParams.Height, extraParams.MaxWidth, extraParams.MaxHeight)
-		exhaustFilename = exhaustFilename[:len(exhaustFilename)-len(ext)] + extraParamsStr + ext
-	}
+	exhaustFilename := buildExhaustFilename(reqURI, extraParams)
 
 	// 检查文件是否已经在 EXHAUST_PATH 中
 	if helper.FileExists(exhaustFilename) {
@@ -76,136 +44,137 @@ func Convert(c *fiber.Ctx) error {
 		return c.SendFile(exhaustFilename)
 	}
 
-	// 使用 sync.Once 确保并发安全
-	var once sync.Once
-	var processErr error
-	var fileStatus struct {
-		isAllowed    bool
-		isLocal      bool
-		path         string
-		needRedirect bool
+	// 处理图像
+	isLocalPath := strings.HasPrefix(matchedTarget, "./") || strings.HasPrefix(matchedTarget, "/")
+	if isLocalPath {
+		return handleLocalImage(c, matchedTarget, reqURI, exhaustFilename, extraParams)
+	} else {
+		return handleRemoteImage(c, matchedTarget, matchedPrefix, reqURIwithQuery, exhaustFilename, extraParams)
+	}
+}
+
+func parseRequestURI(c *fiber.Ctx) (string, string) {
+	reqURIRaw, _ := url.QueryUnescape(c.Path())
+	reqURIwithQueryRaw, _ := url.QueryUnescape(c.OriginalURL())
+	return path.Clean(reqURIRaw), path.Clean(reqURIwithQueryRaw)
+}
+
+func parseExtraParams(c *fiber.Ctx) config.ExtraParams {
+	width, _ := strconv.Atoi(c.Query("width"))
+	height, _ := strconv.Atoi(c.Query("height"))
+	maxHeight, _ := strconv.Atoi(c.Query("max_height"))
+	maxWidth, _ := strconv.Atoi(c.Query("max_width"))
+	return config.ExtraParams{
+		Width:     width,
+		Height:    height,
+		MaxWidth:  maxWidth,
+		MaxHeight: maxHeight,
+	}
+}
+
+func findMatchingPrefix(reqURI string) (string, string) {
+	for prefix, target := range config.Config.ImageMap {
+		if strings.HasPrefix(reqURI, prefix) {
+			return prefix, target
+		}
+	}
+	return "", ""
+}
+
+func buildExhaustFilename(reqURI string, extraParams config.ExtraParams) string {
+	exhaustFilename := path.Join(config.Config.ExhaustPath, reqURI)
+	if extraParams.Width > 0 || extraParams.Height > 0 || extraParams.MaxWidth > 0 || extraParams.MaxHeight > 0 {
+		ext := path.Ext(exhaustFilename)
+		extraParamsStr := fmt.Sprintf("_w%d_h%d_mw%d_mh%d", extraParams.Width, extraParams.Height, extraParams.MaxWidth, extraParams.MaxHeight)
+		exhaustFilename = exhaustFilename[:len(exhaustFilename)-len(ext)] + extraParamsStr + ext
+	}
+	return exhaustFilename
+}
+
+func handleLocalImage(c *fiber.Ctx, matchedTarget, reqURI, exhaustFilename string, extraParams config.ExtraParams) error {
+	rawImageAbs := path.Join(matchedTarget, reqURI)
+
+	if !helper.FileExists(rawImageAbs) {
+		return c.Status(fiber.StatusNotFound).SendString("本地文件不存在")
 	}
 
-	processImage := func() {
-		once.Do(func() {
-			// 文件不在 EXHAUST_PATH 中，需要处理
-			isLocalPath := strings.HasPrefix(matchedTarget, "./") || strings.HasPrefix(matchedTarget, "/")
-			var rawImageAbs string
-			var isNewDownload bool
-			var realRemoteAddr string
-
-			if isLocalPath {
-				// 处理本地路径
-				rawImageAbs = path.Join(matchedTarget, reqURI)
-
-				// 检查本地文件是否存在
-				if !helper.FileExists(rawImageAbs) {
-					processErr = fmt.Errorf("本地文件不存在: %s", rawImageAbs)
-					return
-				}
-				isNewDownload = false // 本地文件不需要清理
-			} else {
-				// 处理远程URL
-				targetUrl, err := url.Parse(matchedTarget)
-				if err != nil {
-					processErr = fmt.Errorf("解析目标 URL 失败")
-					log.Errorf("%s: %v", processErr, err)
-					return
-				}
-
-				targetHostName := targetUrl.Host
-				targetHost := targetUrl.Scheme + "://" + targetUrl.Host
-
-				// 保留查询参数
-				reqURIwithQuery := strings.Replace(reqURIwithQuery, matchedPrefix, targetUrl.Path, 1)
-				if strings.HasSuffix(targetUrl.Path, "/") {
-					reqURIwithQuery = strings.TrimPrefix(reqURIwithQuery, "/")
-				}
-
-				realRemoteAddr = targetHost + reqURIwithQuery
-
-				rawImageAbs, isNewDownload, err = fetchRemoteImg(realRemoteAddr, targetHostName)
-				if err != nil {
-					processErr = fmt.Errorf("获取远程图像失败")
-					log.Errorf("%s: %v", processErr, err)
-					return
-				}
-			}
-
-			// 检查是否为允许的图片文件
-			if !helper.IsAllowedImageFile(filename) {
-				log.Infof("不允许的文件类型或非图片文件: %s", reqURI)
-				fileStatus.isAllowed = false
-				fileStatus.isLocal = isLocalPath
-				if isLocalPath {
-					fileStatus.path = rawImageAbs
-				} else {
-					fileStatus.path = realRemoteAddr
-				}
-				fileStatus.needRedirect = !isLocalPath
-				return
-			}
-
-			fileStatus.isAllowed = true
-
-			// 处理图片
-			isSmall, err := helper.IsFileSizeSmall(rawImageAbs, 30*1024) // 30KB
-			if err != nil {
-				processErr = fmt.Errorf("检查文件大小时出错: %v", err)
-				return
-			}
-
-			// 确保目标目录存在
-			if err := os.MkdirAll(path.Dir(exhaustFilename), 0755); err != nil {
-				processErr = fmt.Errorf("创建目标目录失败: %v", err)
-				return
-			}
-
-			if isSmall {
-				if err := helper.CopyFile(rawImageAbs, exhaustFilename); err != nil {
-					processErr = fmt.Errorf("复制小文件到 EXHAUST_PATH 失败: %v", err)
-					return
-				}
-			} else {
-				err := encoder.ProcessAndSaveImage(rawImageAbs, exhaustFilename, extraParams)
-				if err != nil {
-					log.Warnf("处理图片失败，将直接复制原图: %v", err)
-					if copyErr := helper.CopyFile(rawImageAbs, exhaustFilename); copyErr != nil {
-						processErr = fmt.Errorf("复制原图到 EXHAUST_PATH 失败: %v", copyErr)
-						return
-					}
-					log.Infof("已将原图复制到 EXHAUST_PATH: %s", exhaustFilename)
-				}
-			}
-
-			// 如果是新下载的远程文件，安排清理任务
-			if !isLocalPath && isNewDownload {
-				go schedule.ScheduleCleanup(rawImageAbs)
-			}
-		})
+	if !helper.IsAllowedImageFile(path.Base(reqURI)) {
+		log.Infof("不允许的文件类型或非图片文件: %s", reqURI)
+		return c.SendFile(rawImageAbs)
 	}
 
-	// 处理图片
-	processImage()
-	if processErr != nil {
-		log.Error(processErr)
-		return c.Status(fiber.StatusInternalServerError).SendString(processErr.Error())
+	return processAndSaveImage(c, rawImageAbs, exhaustFilename, extraParams)
+}
+
+func handleRemoteImage(c *fiber.Ctx, matchedTarget, matchedPrefix, reqURIwithQuery, exhaustFilename string, extraParams config.ExtraParams) error {
+	targetUrl, err := url.Parse(matchedTarget)
+	if err != nil {
+		log.Errorf("解析目标 URL 失败: %v", err)
+		return c.Status(fiber.StatusInternalServerError).SendString("服务器配置错误")
 	}
 
-	// 根据文件状态决定如何响应
-	if !fileStatus.isAllowed {
-		if fileStatus.isLocal {
-			return c.SendFile(fileStatus.path)
-		} else if fileStatus.needRedirect {
-			return c.Redirect(fileStatus.path, 302)
+	realRemoteAddr := buildRealRemoteAddr(targetUrl, matchedPrefix, reqURIwithQuery)
+
+	rawImageAbs, isNewDownload, err := fetchRemoteImg(realRemoteAddr, targetUrl.Host)
+	if err != nil {
+		log.Errorf("获取远程图像失败: %v", err)
+		return c.Status(fiber.StatusInternalServerError).SendString("无法获取远程图像")
+	}
+
+	if !helper.IsAllowedImageFile(path.Base(reqURIwithQuery)) {
+		log.Infof("不允许的文件类型或非图片文件: %s", reqURIwithQuery)
+		return c.Redirect(realRemoteAddr, 302)
+	}
+
+	err = processAndSaveImage(c, rawImageAbs, exhaustFilename, extraParams)
+	if err != nil {
+		return err
+	}
+
+	if isNewDownload {
+		go schedule.ScheduleCleanup(rawImageAbs)
+	}
+
+	return c.SendFile(exhaustFilename)
+}
+
+func buildRealRemoteAddr(targetUrl *url.URL, matchedPrefix, reqURIwithQuery string) string {
+	targetHost := targetUrl.Scheme + "://" + targetUrl.Host
+	reqURIwithQuery = strings.Replace(reqURIwithQuery, matchedPrefix, targetUrl.Path, 1)
+	if strings.HasSuffix(targetUrl.Path, "/") {
+		reqURIwithQuery = strings.TrimPrefix(reqURIwithQuery, "/")
+	}
+	return targetHost + reqURIwithQuery
+}
+
+func processAndSaveImage(c *fiber.Ctx, rawImageAbs, exhaustFilename string, extraParams config.ExtraParams) error {
+	isSmall, err := helper.IsFileSizeSmall(rawImageAbs, 30*1024) // 30KB
+	if err != nil {
+		log.Errorf("检查文件大小时出错: %v", err)
+		return c.Status(fiber.StatusInternalServerError).SendString("处理图像时出错")
+	}
+
+	if err := os.MkdirAll(path.Dir(exhaustFilename), 0755); err != nil {
+		log.Errorf("创建目标目录失败: %v", err)
+		return c.Status(fiber.StatusInternalServerError).SendString("服务器错误")
+	}
+
+	if isSmall {
+		if err := helper.CopyFile(rawImageAbs, exhaustFilename); err != nil {
+			log.Errorf("复制小文件到 EXHAUST_PATH 失败: %v", err)
+			return c.Status(fiber.StatusInternalServerError).SendString("处理图像时出错")
+		}
+	} else {
+		err := encoder.ProcessAndSaveImage(rawImageAbs, exhaustFilename, extraParams)
+		if err != nil {
+			log.Warnf("处理图片失败，将直接复制原图: %v", err)
+			if copyErr := helper.CopyFile(rawImageAbs, exhaustFilename); copyErr != nil {
+				log.Errorf("复制原图到 EXHAUST_PATH 失败: %v", copyErr)
+				return c.Status(fiber.StatusInternalServerError).SendString("处理图像时出错")
+			}
+			log.Infof("已将原图复制到 EXHAUST_PATH: %s", exhaustFilename)
 		}
 	}
 
-	// 再次检查文件是否存在（以防并发情况下的竞态条件）
-	if !helper.FileExists(exhaustFilename) {
-		return c.Status(fiber.StatusInternalServerError).SendString("处理后的文件未找到")
-	}
-
-	// 发送文件
 	return c.SendFile(exhaustFilename)
 }
