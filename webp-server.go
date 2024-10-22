@@ -23,9 +23,10 @@ var app = fiber.New(fiber.Config{
 	AppName:               "WebP Server Go",
 	DisableStartupMessage: true,
 	ProxyHeader:           "X-Real-IP",
-	ReadBufferSize:        config.Config.ReadBufferSize,   // per-connection buffer size for requests' reading. This also limits the maximum header size. Increase this buffer if your clients send multi-KB RequestURIs and/or multi-KB headers (for example, BIG cookies).
-	Concurrency:           config.Config.Concurrency,      // Maximum number of concurrent connections.
-	DisableKeepalive:      config.Config.DisableKeepalive, // Disable keep-alive connections, the server will close incoming connections after sending the first response to the client
+	ReadBufferSize:        config.Config.ReadBufferSize, // 用于请求读取的每个连接缓冲区大小。这也限制了最大标头大小。如果您的客户端发送多 KB RequestURI 和/或多 KB 标头（例如，BIG cookies），请增加此缓冲区。
+	WriteBufferSize:       1024 * 4,
+	Concurrency:           config.Config.Concurrency,      // 最大并发连接数。
+	DisableKeepalive:      config.Config.DisableKeepalive, // 禁用保持活动连接，服务器将在向客户端发送第一个响应后关闭传入连接
 })
 
 func setupLogger() {

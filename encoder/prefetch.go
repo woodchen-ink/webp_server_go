@@ -5,6 +5,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sync"
 	"time"
 	"webp_server_go/config"
 	"webp_server_go/helper"
@@ -14,54 +15,51 @@ import (
 )
 
 func PrefetchImages() {
-	// maximum ongoing prefetch is depending on your core of CPU
-	var sTime = time.Now()
+	sTime := time.Now()
 	log.Infof("Prefetching using %d cores", config.Jobs)
-	var finishChan = make(chan int, config.Jobs)
-	for range config.Jobs {
-		finishChan <- 1
-	}
 
-	//prefetch, recursive through the dir
+	// 使用固定大小的工作池来限制并发
+	workerPool := make(chan struct{}, config.Jobs)
+	var wg sync.WaitGroup
+
 	all := helper.FileCount(config.Config.ImgPath)
-	var bar = progressbar.Default(all, "Prefetching...")
+	bar := progressbar.Default(all, "Prefetching...")
+
 	err := filepath.Walk(config.Config.ImgPath,
 		func(picAbsPath string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			if info.IsDir() {
+			if err != nil || info.IsDir() || !helper.CheckAllowedType(picAbsPath) {
 				return nil
 			}
-			if !helper.CheckAllowedType(picAbsPath) {
-				return nil
-			}
-			// RawImagePath string, ImgFilename string, reqURI string
-			metadata := helper.ReadMetadata(picAbsPath, "", config.LocalHostAlias)
-			avifAbsPath, webpAbsPath, jxlAbsPath := helper.GenOptimizedAbsPath(metadata, config.LocalHostAlias)
 
-			// Using avifAbsPath here is the same as using webpAbsPath/jxlAbsPath
-			_ = os.MkdirAll(path.Dir(avifAbsPath), 0755)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				workerPool <- struct{}{}        // 获取工作槽
+				defer func() { <-workerPool }() // 释放工作槽
 
-			log.Infof("Prefetching %s", picAbsPath)
+				metadata := helper.ReadMetadata(picAbsPath, "", config.LocalHostAlias)
+				avifAbsPath, webpAbsPath, jxlAbsPath := helper.GenOptimizedAbsPath(metadata, config.LocalHostAlias)
 
-			// Allow all supported formats
-			supported := map[string]bool{
-				"raw":  true,
-				"webp": true,
-				"avif": true,
-				"jxl":  true,
-			}
+				_ = os.MkdirAll(path.Dir(avifAbsPath), 0755)
 
-			go ConvertFilter(picAbsPath, jxlAbsPath, avifAbsPath, webpAbsPath, config.ExtraParams{Width: 0, Height: 0}, supported, finishChan)
-			_ = bar.Add(<-finishChan)
+				log.Infof("Prefetching %s", picAbsPath)
+
+				supported := map[string]bool{
+					"raw": true, "webp": true, "avif": true, "jxl": true,
+				}
+
+				ConvertFilter(picAbsPath, jxlAbsPath, avifAbsPath, webpAbsPath, config.ExtraParams{Width: 0, Height: 0}, supported, nil)
+				_ = bar.Add(1)
+			}()
+
 			return nil
 		})
+
+	wg.Wait() // 等待所有工作完成
 
 	if err != nil {
 		log.Errorln(err)
 	}
 	elapsed := time.Since(sTime)
 	_, _ = fmt.Fprintf(os.Stdout, "Prefetch complete in %s\n\n", elapsed)
-
 }

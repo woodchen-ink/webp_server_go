@@ -1,19 +1,18 @@
 package handler
 
 import (
-	"bytes"
+	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 	"webp_server_go/config"
 	"webp_server_go/helper"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/h2non/filetype"
 	"github.com/patrickmn/go-cache"
 	log "github.com/sirupsen/logrus"
 )
@@ -33,49 +32,35 @@ func cleanProxyCache(cacheImagePath string) {
 	}
 }
 
-func downloadFile(filepath string, url string) {
+func downloadFile(filepath string, url string) error {
 	resp, err := http.Get(url)
 	if err != nil {
 		log.Errorln("下载文件时连接到远程错误！")
-		return
+		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != fiber.StatusOK {
 		log.Errorf("获取远程图像时远程返回 %s", resp.Status)
-		return
+		return fmt.Errorf("unexpected status: %s", resp.Status)
 	}
 
-	// Copy bytes here
-	bodyBytes := new(bytes.Buffer)
-	_, err = bodyBytes.ReadFrom(resp.Body)
-	if err != nil {
-		return
-	}
-
-	// Check if remote content-type is image using check by filetype instead of content-type returned by origin
-	kind, _ := filetype.Match(bodyBytes.Bytes())
-	mime := kind.MIME.Value
-	if !strings.Contains(mime, "image") {
-		log.Errorf("远程文件 %s 不是图像，远程内容的 MIME 类型为 %s", url, mime)
-		return
-	}
-
+	// 创建目标文件
 	_ = os.MkdirAll(path.Dir(filepath), 0755)
-
-	// Create Cache here as a lock, so we can prevent incomplete file from being read
-	// Key: filepath, Value: true
-	config.WriteLock.Set(filepath, true, -1)
-
-	err = os.WriteFile(filepath, bodyBytes.Bytes(), 0600)
+	out, err := os.Create(filepath)
 	if err != nil {
-		// not likely to happen
-		return
+		return err
+	}
+	defer out.Close()
+
+	// 使用小缓冲区流式写入文件
+	buf := make([]byte, 32*1024)
+	_, err = io.CopyBuffer(out, resp.Body, buf)
+	if err != nil {
+		return err
 	}
 
-	// Delete lock here
-	config.WriteLock.Delete(filepath)
-
+	return nil
 }
 
 func fetchRemoteImg(url string, subdir string) config.MetaFile {

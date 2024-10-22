@@ -51,9 +51,9 @@ func ReadMetadata(p, etag string, subdir string) config.MetaFile {
 func WriteMetadata(p, etag string, subdir string) config.MetaFile {
 	_ = os.MkdirAll(path.Join(config.Config.MetadataPath, subdir), 0755)
 
-	var id, filepath, sant = getId(p)
+	id, filepath, sant := getId(p)
 
-	var data = config.MetaFile{
+	data := config.MetaFile{
 		Id: id,
 	}
 
@@ -65,8 +65,19 @@ func WriteMetadata(p, etag string, subdir string) config.MetaFile {
 		data.Checksum = HashFile(filepath)
 	}
 
-	buf, _ := json.Marshal(data)
-	_ = os.WriteFile(path.Join(config.Config.MetadataPath, subdir, data.Id+".json"), buf, 0644)
+	// 使用流式 JSON 编码器
+	file, err := os.Create(path.Join(config.Config.MetadataPath, subdir, data.Id+".json"))
+	if err != nil {
+		log.Errorf("无法创建元数据文件: %v", err)
+		return data
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+	if err := encoder.Encode(data); err != nil {
+		log.Errorf("无法编码元数据: %v", err)
+	}
+
 	return data
 }
 
