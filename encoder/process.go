@@ -207,57 +207,62 @@ func ProcessAndSaveImage(rawImageAbs, exhaustFilename string, extraParams config
 		return err
 	}
 
+	// 如果原始图像是 NEF 格式，先转换为 JPG
+	if strings.HasSuffix(strings.ToLower(rawImageAbs), ".nef") {
+		var convertedRaw, converted = ConvertRawToJPG(rawImageAbs, exhaustFilename)
+		if converted {
+			rawImageAbs = convertedRaw
+			defer func() {
+				log.Infoln("移除中间转换文件:", convertedRaw)
+				if err := os.Remove(convertedRaw); err != nil {
+					log.Warnln("删除转换文件失败", err)
+				}
+			}()
+		}
+	}
+
 	// 加载图像
 	img, err := vips.LoadImageFromFile(rawImageAbs, &vips.ImportParams{
 		FailOnError: boolFalse,
+		NumPages:    intMinusOne,
 	})
 	if err != nil {
-		log.Warnf("加载图像失败: 文件=%s, 错误=%v", rawImageAbs, err)
+		log.Warnf("无法打开源图像: %v", err)
 		return err
 	}
 	defer img.Close()
 
-	// 调整图像大小
-	if err := resizeImage(img, extraParams); err != nil {
-		log.Warnf("调整图像大小失败: %v", err)
-		return err
-	}
-
-	// 移除元数据（如果配置要求）
-	if config.Config.StripMetadata {
-		log.Debug("正在移除图像元数据")
-		img.RemoveMetadata()
-	}
-
-	var buf []byte
-	var exportErr error
-
 	// 确定输出格式
-	if strings.HasSuffix(exhaustFilename, ".avif") {
-		buf, _, exportErr = img.ExportAvif(vips.AvifExportParams{
-			Quality: config.Config.Quality,
-		})
-	} else if strings.HasSuffix(exhaustFilename, ".jxl") {
-		// 注意：govips 可能不直接支持 JXL 导出，这里使用 JPEG 作为替代
-		buf, _, exportErr = img.ExportJpeg(vips.JpegExportParams{
-			Quality: config.Config.Quality,
-		})
-	} else {
-		// 默认使用 WebP
-		buf, _, exportErr = img.ExportWebp(vips.WebpExportParams{
-			Quality: config.Config.Quality,
-		})
+	var imageType string
+	switch {
+	case strings.HasSuffix(exhaustFilename, ".avif"):
+		imageType = "avif"
+	case strings.HasSuffix(exhaustFilename, ".jxl"):
+		imageType = "jxl"
+	default:
+		imageType = "webp"
 	}
 
-	if exportErr != nil {
-		log.Errorf("导出图像失败: %v", exportErr)
-		return exportErr
-	}
-
-	// 写入文件
-	if err := os.WriteFile(exhaustFilename, buf, 0600); err != nil {
-		log.Errorf("写入目标文件失败: 文件=%s, 错误=%v", exhaustFilename, err)
+	// 预处理图像（自动旋转、调整大小等）
+	if err := preProcessImage(img, imageType, extraParams); err != nil {
+		log.Warnf("无法预处理源图像: %v", err)
 		return err
+	}
+
+	// 根据图像类型进行编码
+	var encoderErr error
+	switch imageType {
+	case "webp":
+		encoderErr = webpEncoder(img, rawImageAbs, exhaustFilename)
+	case "avif":
+		encoderErr = avifEncoder(img, rawImageAbs, exhaustFilename)
+	case "jxl":
+		encoderErr = jxlEncoder(img, rawImageAbs, exhaustFilename)
+	}
+
+	if encoderErr != nil {
+		log.Errorf("图像编码失败: %v", encoderErr)
+		return encoderErr
 	}
 
 	log.Infof("图像处理成功: 目标文件=%s", exhaustFilename)
