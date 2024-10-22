@@ -95,7 +95,7 @@ func handleLocalImage(c *fiber.Ctx, matchedTarget, reqURI, exhaustFilename strin
 	rawImageAbs := path.Join(matchedTarget, reqURI)
 
 	if !helper.FileExists(rawImageAbs) {
-		return c.Status(fiber.StatusNotFound).SendString("本地文件不存在")
+		return c.Status(fiber.StatusNotFound).SendString("文件不存在")
 	}
 
 	if !helper.IsAllowedImageFile(path.Base(reqURI)) {
@@ -115,15 +115,16 @@ func handleRemoteImage(c *fiber.Ctx, matchedTarget, matchedPrefix, reqURIwithQue
 
 	realRemoteAddr := buildRealRemoteAddr(targetUrl, matchedPrefix, reqURIwithQuery)
 
+	// 首先检查是否为允许的图片文件
+	if !helper.IsAllowedImageFile(path.Base(reqURIwithQuery)) {
+		log.Infof("不允许的文件类型或非图片文件: %s", reqURIwithQuery)
+		return c.Redirect(realRemoteAddr, 302)
+	}
+
 	rawImageAbs, isNewDownload, err := fetchRemoteImg(realRemoteAddr, targetUrl.Host)
 	if err != nil {
 		log.Errorf("获取远程图像失败: %v", err)
 		return c.Status(fiber.StatusInternalServerError).SendString("无法获取远程图像")
-	}
-
-	if !helper.IsAllowedImageFile(path.Base(reqURIwithQuery)) {
-		log.Infof("不允许的文件类型或非图片文件: %s", reqURIwithQuery)
-		return c.Redirect(realRemoteAddr, 302)
 	}
 
 	err = processAndSaveImage(c, rawImageAbs, exhaustFilename, extraParams)
