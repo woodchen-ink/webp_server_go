@@ -98,57 +98,90 @@ func ConvertFilter(rawPath, jxlPath, avifPath, webpPath string, extraParams conf
 }
 
 func convertImage(rawPath, optimizedPath, imageType string, extraParams config.ExtraParams) error {
-	// we need to create dir first
-	var err = os.MkdirAll(path.Dir(optimizedPath), 0755)
+	// 创建目标目录
+	err := os.MkdirAll(path.Dir(optimizedPath), 0755)
 	if err != nil {
 		log.Error(err.Error())
+		return err
 	}
-	// If original image is NEF, convert NEF image to JPG first
+
+	// 如果原始图像是 NEF 格式，先转换为 JPG
 	if strings.HasSuffix(strings.ToLower(rawPath), ".nef") {
-		var convertedRaw, converted = ConvertRawToJPG(rawPath, optimizedPath)
-		// If converted, use converted file as raw
+		convertedRaw, converted := ConvertRawToJPG(rawPath, optimizedPath)
 		if converted {
-			// Use converted file(JPG) as raw input for further conversion
 			rawPath = convertedRaw
-			// Remove converted file after conversion
 			defer func() {
-				log.Infoln("Removing intermediate conversion file:", convertedRaw)
-				err := os.Remove(convertedRaw)
-				if err != nil {
-					log.Warnln("failed to delete converted file", err)
+				log.Infoln("移除中间转换文件:", convertedRaw)
+				if err := os.Remove(convertedRaw); err != nil {
+					log.Warnln("删除转换文件失败", err)
 				}
 			}()
 		}
 	}
 
-	// Image is only opened here
+	// 打开图像
 	img, err := vips.LoadImageFromFile(rawPath, &vips.ImportParams{
 		FailOnError: boolFalse,
 		NumPages:    intMinusOne,
 	})
 	if err != nil {
-		log.Warnf("Can't open source image: %v", err)
+		log.Warnf("无法打开源图像: %v", err)
 		return err
 	}
 	defer img.Close()
 
-	// Pre-process image(auto rotate, resize, etc.)
-	err = preProcessImage(img, imageType, extraParams)
+	// 预处理图像（自动旋转、调整大小等）
+	shouldCopyOriginal, err := preProcessImage(img, imageType, extraParams)
 	if err != nil {
-		log.Warnf("Can't pre-process source image: %v", err)
+		log.Warnf("无法预处理源图像: %v", err)
+		if shouldCopyOriginal {
+			log.Infof("由于预处理错误，将复制原图")
+			return helper.CopyFile(rawPath, optimizedPath)
+		}
 		return err
 	}
 
+	// 根据图像类型进行编码
+	var encoderErr error
 	switch imageType {
 	case "webp":
-		err = webpEncoder(img, rawPath, optimizedPath)
+		encoderErr = webpEncoder(img, rawPath, optimizedPath)
 	case "avif":
-		err = avifEncoder(img, rawPath, optimizedPath)
+		encoderErr = avifEncoder(img, rawPath, optimizedPath)
 	case "jxl":
-		err = jxlEncoder(img, rawPath, optimizedPath)
+		encoderErr = jxlEncoder(img, rawPath, optimizedPath)
 	}
 
-	return err
+	if encoderErr != nil {
+		log.Warnf("图像编码失败: %v", encoderErr)
+		// 如果编码失败，我们也复制原图
+		return helper.CopyFile(rawPath, optimizedPath)
+	}
+
+	// 比较转换后的文件大小
+	originalInfo, err := os.Stat(rawPath)
+	if err != nil {
+		log.Errorf("获取原图文件信息失败: %v", err)
+		return err
+	}
+	convertedInfo, err := os.Stat(optimizedPath)
+	if err != nil {
+		log.Errorf("获取转换后文件信息失败: %v", err)
+		return err
+	}
+
+	if convertedInfo.Size() > originalInfo.Size() {
+		log.Infof("转换后的图片大于原图，使用原图: %s", rawPath)
+		// 删除转换后的大文件
+		if err := os.Remove(optimizedPath); err != nil {
+			log.Warnf("删除大的转换文件失败: %v", err)
+		}
+		// 将原图复制到目标路径
+		return helper.CopyFile(rawPath, optimizedPath)
+	}
+
+	log.Infof("图像处理成功: 目标文件=%s", optimizedPath)
+	return nil
 }
 
 func jxlEncoder(img *vips.ImageRef, rawPath string, optimizedPath string) error {
