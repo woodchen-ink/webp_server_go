@@ -5,6 +5,7 @@ import (
 	"os"
 	"path"
 	"slices"
+	"strings"
 	"webp_server_go/config"
 
 	"github.com/davidbyttow/govips/v2/vips"
@@ -194,5 +195,62 @@ func preProcessImage(img *vips.ImageRef, imageType string, extraParams config.Ex
 	}
 
 	log.Debug("图像预处理完成")
+	return nil
+}
+
+func ProcessAndSaveImage(rawImageAbs, exhaustFilename string, extraParams config.ExtraParams) error {
+	// 创建目标目录
+	if err := os.MkdirAll(path.Dir(exhaustFilename), 0755); err != nil {
+		log.Errorf("创建目标目录失败: %v", err)
+		return err
+	}
+
+	// 加载图像
+	img, err := vips.LoadImageFromFile(rawImageAbs, &vips.ImportParams{
+		FailOnError: boolFalse,
+	})
+	if err != nil {
+		log.Warnf("加载图像失败: 文件=%s, 错误=%v", rawImageAbs, err)
+		return err
+	}
+	defer img.Close()
+
+	// 调整图像大小
+	if err := resizeImage(img, extraParams); err != nil {
+		log.Warnf("调整图像大小失败: %v", err)
+		return err
+	}
+
+	// 移除元数据（如果配置要求）
+	if config.Config.StripMetadata {
+		log.Debug("正在移除图像元数据")
+		img.RemoveMetadata()
+	}
+
+	// 确定输出格式
+	outputFormat := vips.ImageTypeWebP // 默认使用 WebP
+	if strings.HasSuffix(exhaustFilename, ".avif") {
+		outputFormat = vips.ImageTypeAVIF
+	} else if strings.HasSuffix(exhaustFilename, ".jxl") {
+		outputFormat = vips.ImageTypeJPEG // 假设 JXL 不直接支持，使用 JPEG
+	}
+
+	// 导出图像
+	buf, _, err := img.Export(vips.ExportParams{
+		Format:  outputFormat,
+		Quality: config.Config.Quality,
+	})
+	if err != nil {
+		log.Errorf("导出图像失败: %v", err)
+		return err
+	}
+
+	// 写入文件
+	if err := os.WriteFile(exhaustFilename, buf, 0600); err != nil {
+		log.Errorf("写入目标文件失败: 文件=%s, 错误=%v", exhaustFilename, err)
+		return err
+	}
+
+	log.Infof("图像处理成功: 目标文件=%s", exhaustFilename)
 	return nil
 }

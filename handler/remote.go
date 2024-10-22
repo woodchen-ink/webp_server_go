@@ -13,7 +13,6 @@ import (
 	"webp_server_go/helper"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/patrickmn/go-cache"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -64,58 +63,16 @@ func downloadFile(filepath string, url string) error {
 }
 
 func fetchRemoteImg(url string, subdir string) config.MetaFile {
-	cacheKey := subdir + ":" + helper.HashString(url)
-
 	var metadata config.MetaFile
-	var etag string
-	var size int64
-	var lastModified time.Time
 
-	if cachedETag, found := config.RemoteCache.Get(cacheKey); found {
-		etag = cachedETag.(string)
-		log.Infof("使用缓存的 ETag 进行远程地址: %s", url)
-	} else {
-		log.Infof("远程地址是 %s，正在 ping 获取信息...", url)
-		etag, size, lastModified = pingURL(url)
-		if etag != "" {
-			config.RemoteCache.Set(cacheKey, etag, cache.DefaultExpiration)
-		}
-	}
-
-	metadata = helper.ReadMetadata(url, etag, subdir)
+	metadata = helper.ReadMetadata(url, "", subdir)
 	localRawImagePath := path.Join(config.Config.RemoteRawPath, subdir, metadata.Id)
-	localExhaustImagePath := path.Join(config.Config.ExhaustPath, subdir, metadata.Id)
 
-	needUpdate := false
 	if !helper.ImageExists(localRawImagePath) {
 		log.Info("在远程原始文件中找不到远程文件，正在获取...")
-		needUpdate = true
-	} else {
-		localFileInfo, err := os.Stat(localRawImagePath)
-		if err == nil {
-			if size > 0 && size != localFileInfo.Size() {
-				log.Info("文件大小已更改，正在更新...")
-				needUpdate = true
-			} else if !lastModified.IsZero() && lastModified.After(localFileInfo.ModTime()) {
-				log.Info("远程文件较新，正在更新...")
-				needUpdate = true
-			} else if metadata.Checksum != helper.HashString(etag) {
-				log.Info("ETag 已更改，正在更新...")
-				needUpdate = true
-			}
-		} else {
-			log.Warnf("检查本地文件时出错: %v", err)
-			needUpdate = true
-		}
-	}
-
-	if needUpdate {
-		cleanProxyCache(localExhaustImagePath)
-		helper.DeleteMetadata(url, subdir)
-		helper.WriteMetadata(url, etag, subdir)
 		downloadFile(localRawImagePath, url)
 		// 重新读取更新后的元数据
-		metadata = helper.ReadMetadata(url, etag, subdir)
+		metadata = helper.WriteMetadata(url, "", subdir)
 	}
 
 	return metadata
