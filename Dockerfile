@@ -12,11 +12,14 @@ RUN cd /build && sed -i "s|\"\"|\"${EXHAUST_PATH}\"|g" config.json  \
 
 FROM alpine:latest
 
-RUN apt update && apt install --no-install-recommends libvips ca-certificates -y && rm -rf /var/lib/apt/lists/* &&  rm -rf /var/cache/apt/archives/*
-
+RUN apk update && \
+    apk add --no-cache libvips ca-certificates && \
+    rm -rf /var/cache/apk/*
+    
 COPY --from=builder /build/webp-server  /usr/bin/webp-server
 COPY --from=builder /build/config.json /etc/config.json
-
+    
 WORKDIR /opt
 VOLUME /opt/exhaust
 CMD ["/usr/bin/webp-server", "--config", "/etc/config.json"]
+    
