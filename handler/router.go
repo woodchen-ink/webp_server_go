@@ -154,9 +154,14 @@ func Convert(c *fiber.Ctx) error {
 					return
 				}
 			} else {
-				if err := encoder.ProcessAndSaveImage(rawImageAbs, exhaustFilename, extraParams); err != nil {
-					processErr = fmt.Errorf("处理图片失败: %v", err)
-					return
+				err := encoder.ProcessAndSaveImage(rawImageAbs, exhaustFilename, extraParams)
+				if err != nil {
+					log.Warnf("处理图片失败，将直接复制原图: %v", err)
+					if copyErr := helper.CopyFile(rawImageAbs, exhaustFilename); copyErr != nil {
+						processErr = fmt.Errorf("复制原图到 EXHAUST_PATH 失败: %v", copyErr)
+						return
+					}
+					log.Infof("已将原图复制到 EXHAUST_PATH: %s", exhaustFilename)
 				}
 			}
 

@@ -172,36 +172,45 @@ func ResizeItself(raw, dest string, extraParams config.ExtraParams) {
 	log.Infof("图像大小调整成功: 目标文件=%s", dest)
 }
 
-// Pre-process image(auto rotate, resize, etc.)
-func preProcessImage(img *vips.ImageRef, imageType string, extraParams config.ExtraParams) error {
+// 预处理图像（自动旋转、调整大小等）
+
+func preProcessImage(img *vips.ImageRef, imageType string, extraParams config.ExtraParams) (bool, error) {
 	log.Debugf("开始预处理图像: 类型=%s, 宽度=%d, 高度=%d", imageType, img.Metadata().Width, img.Metadata().Height)
+
+	// 标志，用于指示是否应该复制原图
+	var shouldCopyOriginal bool
 
 	// 检查宽度/高度并忽略特定图像格式
 	switch imageType {
 	case "webp":
 		if img.Metadata().Width > config.WebpMax || img.Metadata().Height > config.WebpMax {
 			log.Warnf("WebP图像尺寸超限: 宽度=%d, 高度=%d, 最大限制=%d", img.Metadata().Width, img.Metadata().Height, config.WebpMax)
-			return errors.New("WebP：图像太大")
+			shouldCopyOriginal = true
+			return shouldCopyOriginal, errors.New("WebP：图像太大")
 		}
 		if slices.Contains(webpIgnore, img.Format()) {
 			log.Infof("WebP编码器忽略图像类型: %s", img.Format())
-			return errors.New("WebP 编码器：忽略图像类型")
+			shouldCopyOriginal = true
+			return shouldCopyOriginal, errors.New("WebP 编码器：忽略图像类型")
 		}
 	case "avif":
 		if img.Metadata().Width > config.AvifMax || img.Metadata().Height > config.AvifMax {
 			log.Warnf("AVIF图像尺寸超限: 宽度=%d, 高度=%d, 最大限制=%d", img.Metadata().Width, img.Metadata().Height, config.AvifMax)
-			return errors.New("AVIF：图像太大")
+			shouldCopyOriginal = true
+			return shouldCopyOriginal, errors.New("AVIF：图像太大")
 		}
 		if slices.Contains(avifIgnore, img.Format()) {
 			log.Infof("AVIF编码器忽略图像类型: %s", img.Format())
-			return errors.New("AVIF 编码器：忽略图像类型")
+			shouldCopyOriginal = true
+			return shouldCopyOriginal, errors.New("AVIF 编码器：忽略图像类型")
 		}
 	}
 
 	// 自动旋转
 	if err := img.AutoRotate(); err != nil {
 		log.Errorf("图像自动旋转失败: %v", err)
-		return err
+		shouldCopyOriginal = true
+		return shouldCopyOriginal, err
 	}
 	log.Debug("图像自动旋转完成")
 
@@ -210,13 +219,14 @@ func preProcessImage(img *vips.ImageRef, imageType string, extraParams config.Ex
 		log.Debug("开始应用额外图像处理参数")
 		if err := resizeImage(img, extraParams); err != nil {
 			log.Errorf("应用额外图像处理参数失败: %v", err)
-			return err
+			// 这里不设置 shouldCopyOriginal 为 true，因为我们不想在这种情况下复制原图
+			return shouldCopyOriginal, err
 		}
 		log.Debug("额外图像处理参数应用完成")
 	}
 
 	log.Debug("图像预处理完成")
-	return nil
+	return shouldCopyOriginal, nil
 }
 
 func ProcessAndSaveImage(rawImageAbs, exhaustFilename string, extraParams config.ExtraParams) error {
@@ -273,8 +283,14 @@ func ProcessAndSaveImage(rawImageAbs, exhaustFilename string, extraParams config
 	}
 
 	// 预处理图像（自动旋转、调整大小等）
-	if err := preProcessImage(img, imageType, extraParams); err != nil {
-		log.Warnf("无法预处理源图像: %v", err)
+	shouldCopyOriginal, err := preProcessImage(img, imageType, extraParams)
+	if err != nil {
+		log.Warnf("预处理源图像时出错: %v", err)
+		if shouldCopyOriginal {
+			log.Infof("由于预处理错误，将复制原图")
+			return helper.CopyFile(rawImageAbs, exhaustFilename)
+		}
+		// 如果不应该复制原图，就返回错误
 		return err
 	}
 
@@ -291,7 +307,7 @@ func ProcessAndSaveImage(rawImageAbs, exhaustFilename string, extraParams config
 
 	if encoderErr != nil {
 		log.Errorf("图像编码失败: %v", encoderErr)
-		return encoderErr
+		return helper.CopyFile(rawImageAbs, exhaustFilename) // 这里可以考虑复制原图
 	}
 
 	// 比较转换后的文件大小
