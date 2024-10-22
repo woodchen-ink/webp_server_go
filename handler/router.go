@@ -107,11 +107,9 @@ func Convert(c *fiber.Ctx) error {
 				}
 
 				// 构建正确的远程地址
-				remoteAddr := targetUrl.String()
-				if !strings.HasSuffix(remoteAddr, "/") {
-					remoteAddr += "/"
-				}
-				remoteAddr += strings.TrimPrefix(reqURI, matchedPrefix)
+				remoteAddr := strings.TrimRight(targetUrl.String(), "/")
+				relativePath := strings.TrimLeft(strings.TrimPrefix(reqURI, matchedPrefix), "/")
+				remoteAddr = remoteAddr + "/" + relativePath
 
 				rawImageAbs, isNewDownload, err = fetchRemoteImg(remoteAddr, targetUrl.Host)
 				if err != nil {
