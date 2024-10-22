@@ -312,6 +312,7 @@ func ProcessAndSaveImage(rawImageAbs, exhaustFilename string, extraParams config
 			log.Errorf("复制原图到 EXHAUST_PATH 失败: %v", err)
 			return err
 		}
+		log.Infof("成功将原图复制到 EXHAUST_PATH: %s", exhaustFilename)
 	} else {
 		log.Infof("图像处理成功: 目标文件=%s", exhaustFilename)
 	}
