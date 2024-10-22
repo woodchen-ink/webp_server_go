@@ -95,10 +95,27 @@ func Convert(c *fiber.Ctx) error {
 	}
 
 	// 处理图片
-	err := encoder.ProcessAndSaveImage(rawImageAbs, exhaustFilename, extraParams)
+
+	// 检查文件大小
+	isSmall, err := helper.IsFileSizeSmall(rawImageAbs, 100*1024) // 100KB
 	if err != nil {
-		log.Errorf("处理图片失败: %v", err)
+		log.Errorf("检查文件大小时出错: %v", err)
 		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+
+	if isSmall {
+		log.Infof("文件 %s 小于100KB，直接复制到 EXHAUST_PATH", rawImageAbs)
+		if err := helper.CopyFile(rawImageAbs, exhaustFilename); err != nil {
+			log.Errorf("复制小文件到 EXHAUST_PATH 失败: %v", err)
+			return c.SendStatus(fiber.StatusInternalServerError)
+		}
+	} else {
+		// 处理图片
+		err := encoder.ProcessAndSaveImage(rawImageAbs, exhaustFilename, extraParams)
+		if err != nil {
+			log.Errorf("处理图片失败: %v", err)
+			return c.SendStatus(fiber.StatusInternalServerError)
+		}
 	}
 
 	return c.SendFile(exhaustFilename)

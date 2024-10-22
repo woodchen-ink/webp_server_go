@@ -242,7 +242,7 @@ func IsAllowedImageFile(filename string) bool {
 	return slices.Contains(allowedTypes, ext)
 }
 
-// 小于100KB文件直接复制到EXHAUST_PATH
+// 直接复制到EXHAUST_PATH
 func CopyFile(src, dst string) error {
 	sourceFileStat, err := os.Stat(src)
 	if err != nil {
