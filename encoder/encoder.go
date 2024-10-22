@@ -39,7 +39,7 @@ func ConvertFilter(rawPath, jxlPath, avifPath, webpPath string, extraParams conf
 
 	for {
 		if _, found := config.ConvertLock.Get(rawPath); found {
-			log.Debugf("file %s is locked under conversion, retrying in %s", rawPath, retryDelay)
+			log.Debugf("文件 %s 在转换过程中被锁定，请在 %s 后重试", rawPath, retryDelay)
 			time.Sleep(retryDelay)
 		} else {
 			// The lock is released, indicating that the conversion is complete
@@ -212,7 +212,7 @@ func avifEncoder(img *vips.ImageRef, rawPath string, optimizedPath string) error
 	}
 
 	if err != nil {
-		log.Warnf("Can't encode source image: %v to AVIF", err)
+		log.Warnf("无法将源图像：%v 编码为 AVIF", err)
 		return err
 	}
 
@@ -253,9 +253,9 @@ func webpEncoder(img *vips.ImageRef, rawPath string, optimizedPath string) error
 			ep.ReductionEffort = i
 			buf, _, err = img.ExportWebp(&ep)
 			if err != nil && strings.Contains(err.Error(), "unable to encode") {
-				log.Warnf("Can't encode image to WebP with ReductionEffort %d, trying higher value...", i)
+				log.Warnf("无法使用 ReductionEffort %d 将图像编码为 WebP，请尝试更高的值...", i)
 			} else if err != nil {
-				log.Warnf("Can't encode source image to WebP:%v", err)
+				log.Warnf("无法将源图像编码为 WebP：%v", err)
 			} else {
 				break
 			}
@@ -264,7 +264,7 @@ func webpEncoder(img *vips.ImageRef, rawPath string, optimizedPath string) error
 	}
 
 	if err != nil {
-		log.Warnf("Can't encode source image: %v to WebP", err)
+		log.Warnf("无法将源图像：%v 编码为 WebP", err)
 		return err
 	}
 

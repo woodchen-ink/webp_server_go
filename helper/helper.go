@@ -2,6 +2,7 @@ package helper
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -84,14 +85,14 @@ func ImageExists(filename string) bool {
 	return !info.IsDir()
 }
 
-func CheckAllowedType(imgFilename string) bool {
-	if config.Config.AllowedTypes[0] == "*" {
-		return true
-	}
-	imgFilenameExtension := strings.ToLower(path.Ext(imgFilename))
-	imgFilenameExtension = strings.TrimPrefix(imgFilenameExtension, ".") // .jpg -> jpg
-	return slices.Contains(config.Config.AllowedTypes, imgFilenameExtension)
-}
+// func CheckAllowedType(imgFilename string) bool {
+// 	if config.Config.AllowedTypes[0] == "*" {
+// 		return true
+// 	}
+// 	imgFilenameExtension := strings.ToLower(path.Ext(imgFilename))
+// 	imgFilenameExtension = strings.TrimPrefix(imgFilenameExtension, ".") // .jpg -> jpg
+// 	return slices.Contains(config.Config.AllowedTypes, imgFilenameExtension)
+// }
 
 func GenOptimizedAbsPath(metadata config.MetaFile, subdir string) (string, string, string) {
 	webpFilename := fmt.Sprintf("%s.webp", metadata.Id)
@@ -219,8 +220,10 @@ func IsFileSizeSmall(filepath string, sizeLimit int64) (bool, error) {
 	return fileInfo.Size() <= sizeLimit, nil
 }
 
-// 新增：检查文件是否为图片的辅助函数
-func IsImageFile(filename string) bool {
+// 新增：检查文件是否为允许的图片的辅助函数
+var defaultAllowedTypes = []string{"jpg", "png", "jpeg", "bmp", "gif", "svg", "nef", "heic", "webp"}
+
+func IsAllowedImageFile(filename string) bool {
 	ext := strings.ToLower(path.Ext(filename))
 	if ext == "" {
 		return false
@@ -228,10 +231,40 @@ func IsImageFile(filename string) bool {
 	ext = ext[1:] // 移除开头的点
 
 	allowedTypes := config.Config.AllowedTypes
-	if len(allowedTypes) == 1 && allowedTypes[0] == "*" {
-		// 如果允许所有类型，则使用默认的图片类型列表
-		allowedTypes = config.NewWebPConfig().AllowedTypes
+	if len(allowedTypes) == 0 {
+		// 如果配置中的 AllowedTypes 为空，使用默认列表
+		allowedTypes = defaultAllowedTypes
+	} else if len(allowedTypes) == 1 && allowedTypes[0] == "*" {
+		// 如果允许所有类型，直接返回 true
+		return true
 	}
 
 	return slices.Contains(allowedTypes, ext)
+}
+
+// 小于100KB文件直接复制到EXHAUST_PATH
+func CopyFile(src, dst string) error {
+	sourceFileStat, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+
+	if !sourceFileStat.Mode().IsRegular() {
+		return fmt.Errorf("%s 不是常规文件", src)
+	}
+
+	source, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+
+	destination, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destination.Close()
+
+	_, err = io.Copy(destination, source)
+	return err
 }

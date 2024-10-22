@@ -38,7 +38,7 @@ func PrefetchImages() {
 				log.Debugf("跳过目录: %s", picAbsPath)
 				return nil
 			}
-			if !helper.CheckAllowedType(picAbsPath) {
+			if !helper.IsAllowedImageFile(picAbsPath) {
 				log.Debugf("跳过不支持的文件类型: %s", picAbsPath)
 				return nil
 			}

@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"net/http"
 	"net/url"
 	"path"
 	"strconv"
@@ -84,7 +83,7 @@ func Convert(c *fiber.Ctx) error {
 		metadata = helper.ReadMetadata(reqURIwithQuery, "", reqHostname)
 		if metadata.Checksum != helper.HashFile(rawImageAbs) {
 			log.Info("本地文件已更改，更新元数据...")
-			helper.WriteMetadata(reqURIwithQuery, "", reqHostname)
+			metadata = helper.WriteMetadata(reqURIwithQuery, "", reqHostname)
 		}
 	} else {
 		// 处理远程URL
@@ -100,9 +99,9 @@ func Convert(c *fiber.Ctx) error {
 		rawImageAbs = path.Join(config.Config.RemoteRawPath, targetHostName, metadata.Id)
 	}
 
-	// 处理非图片文件
-	if !helper.IsImageFile(filename) {
-		log.Infof("Non-image file requested: %s", reqURI)
+	// 检查是否为允许的图片文件
+	if !helper.IsAllowedImageFile(filename) {
+		log.Infof("不允许的文件类型或非图片文件: %s", reqURI)
 		if isLocalPath {
 			return c.SendFile(rawImageAbs)
 		} else {
@@ -110,16 +109,6 @@ func Convert(c *fiber.Ctx) error {
 			return c.Redirect(realRemoteAddr, fiber.StatusFound)
 		}
 	}
-
-	// 检查允许的文件类型
-	if !helper.CheckAllowedType(filename) {
-		msg := "不允许的文件扩展名 " + filename
-		log.Warn(msg)
-		return c.Status(http.StatusBadRequest).SendString(msg)
-	}
-
-	// 后续的图像处理逻辑
-	supportedFormats := helper.GuessSupportedFormat(reqHeader)
 
 	// 检查原始图像是否存在
 	if !helper.ImageExists(rawImageAbs) {
@@ -136,27 +125,36 @@ func Convert(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
 
+	var finalFilename string
 	if isSmall {
-		log.Infof("文件 %s 小于100KB，跳过转换", rawImageAbs)
-		return c.SendFile(rawImageAbs)
+		log.Infof("文件 %s 小于100KB，直接缓存到 EXHAUST_PATH", rawImageAbs)
+		finalFilename = path.Join(config.Config.ExhaustPath, targetHostName, metadata.Id)
+		if err := helper.CopyFile(rawImageAbs, finalFilename); err != nil {
+			log.Errorf("复制小文件到 EXHAUST_PATH 失败: %v", err)
+			return c.SendStatus(fiber.StatusInternalServerError)
+		}
+	} else {
+		avifAbs, webpAbs, jxlAbs := helper.GenOptimizedAbsPath(metadata, targetHostName)
+
+		// 确定支持的格式
+		supportedFormats := helper.GuessSupportedFormat(reqHeader)
+		// 根据支持的格式和配置进行转换
+		encoder.ConvertFilter(rawImageAbs, jxlAbs, avifAbs, webpAbs, extraParams, supportedFormats, nil)
+
+		var availableFiles = []string{rawImageAbs}
+		if supportedFormats["avif"] {
+			availableFiles = append(availableFiles, avifAbs)
+		}
+		if supportedFormats["webp"] {
+			availableFiles = append(availableFiles, webpAbs)
+		}
+		if supportedFormats["jxl"] {
+			availableFiles = append(availableFiles, jxlAbs)
+		}
+
+		finalFilename = helper.FindSmallestFiles(availableFiles)
 	}
 
-	avifAbs, webpAbs, jxlAbs := helper.GenOptimizedAbsPath(metadata, targetHostName)
-	// 根据支持的格式和配置进行转换
-	encoder.ConvertFilter(rawImageAbs, jxlAbs, avifAbs, webpAbs, extraParams, supportedFormats, nil)
-
-	var availableFiles = []string{rawImageAbs}
-	if supportedFormats["avif"] {
-		availableFiles = append(availableFiles, avifAbs)
-	}
-	if supportedFormats["webp"] {
-		availableFiles = append(availableFiles, webpAbs)
-	}
-	if supportedFormats["jxl"] {
-		availableFiles = append(availableFiles, jxlAbs)
-	}
-
-	finalFilename := helper.FindSmallestFiles(availableFiles)
 	contentType := helper.GetFileContentType(finalFilename)
 	c.Set("Content-Type", contentType)
 
