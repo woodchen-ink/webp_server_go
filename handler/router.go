@@ -72,7 +72,7 @@ func Convert(c *fiber.Ctx) error {
 	// 检查文件是否已经在 EXHAUST_PATH 中
 	if helper.FileExists(exhaustFilename) {
 		log.Infof("文件已存在于 EXHAUST_PATH，直接提供服务: %s", exhaustFilename)
-		return c.SendFile(exhaustFilename)
+		return streamFile(c, exhaustFilename)
 	}
 
 	// 文件不在 EXHAUST_PATH 中，需要处理
@@ -110,7 +110,7 @@ func Convert(c *fiber.Ctx) error {
 	// 检查是否为允许的图片文件
 	if !helper.IsAllowedImageFile(filename) {
 		log.Infof("不允许的文件类型或非图片文件: %s", reqURI)
-		return c.SendFile(rawImageAbs)
+		return streamFile(c, rawImageAbs)
 	}
 
 	// 处理图片
@@ -148,5 +148,5 @@ func Convert(c *fiber.Ctx) error {
 		go schedule.ScheduleCleanup(rawImageAbs)
 	}
 
-	return c.SendFile(exhaustFilename)
+	return streamFile(c, exhaustFilename)
 }
