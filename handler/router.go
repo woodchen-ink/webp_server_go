@@ -3,6 +3,7 @@ package handler
 import (
 	"fmt"
 	"net/url"
+	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -123,6 +124,13 @@ func Convert(c *fiber.Ctx) error {
 
 	if isSmall {
 		log.Infof("文件 %s 小于100KB，直接复制到 EXHAUST_PATH", rawImageAbs)
+
+		// 确保目标目录存在
+		if err := os.MkdirAll(path.Dir(exhaustFilename), 0755); err != nil {
+			log.Errorf("创建目标目录失败: %v", err)
+			return c.SendStatus(fiber.StatusInternalServerError)
+		}
+
 		if err := helper.CopyFile(rawImageAbs, exhaustFilename); err != nil {
 			log.Errorf("复制小文件到 EXHAUST_PATH 失败: %v", err)
 			return c.SendStatus(fiber.StatusInternalServerError)
