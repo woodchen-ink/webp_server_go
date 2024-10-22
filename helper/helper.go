@@ -209,3 +209,29 @@ func FileExists(filename string) bool {
 	}
 	return !info.IsDir()
 }
+
+// 检查是否小文件
+func IsFileSizeSmall(filepath string, sizeLimit int64) (bool, error) {
+	fileInfo, err := os.Stat(filepath)
+	if err != nil {
+		return false, err
+	}
+	return fileInfo.Size() <= sizeLimit, nil
+}
+
+// 新增：检查文件是否为图片的辅助函数
+func IsImageFile(filename string) bool {
+	ext := strings.ToLower(path.Ext(filename))
+	if ext == "" {
+		return false
+	}
+	ext = ext[1:] // 移除开头的点
+
+	allowedTypes := config.Config.AllowedTypes
+	if len(allowedTypes) == 1 && allowedTypes[0] == "*" {
+		// 如果允许所有类型，则使用默认的图片类型列表
+		allowedTypes = config.NewWebPConfig().AllowedTypes
+	}
+
+	return slices.Contains(allowedTypes, ext)
+}

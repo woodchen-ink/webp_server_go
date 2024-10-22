@@ -5,7 +5,6 @@ import (
 	"net/url"
 	"path"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 	"webp_server_go/config"
@@ -68,7 +67,7 @@ func Convert(c *fiber.Ctx) error {
 	var metadata = config.MetaFile{}
 
 	// 	非图片清况下302到源文件
-	if !isImageFile(filename) {
+	if !helper.IsImageFile(filename) {
 		log.Infof("Non-image file requested: %s", reqURI)
 		var redirectURL string
 
@@ -231,6 +230,18 @@ func Convert(c *fiber.Ctx) error {
 		return nil
 	}
 
+	// 新增：检查文件大小
+	isSmall, err := helper.IsFileSizeSmall(rawImageAbs, 200*1024) // 200KB
+	if err != nil {
+		log.Errorf("检查文件大小时出错: %v", err)
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+
+	if isSmall {
+		log.Infof("文件 %s 小于200KB，跳过转换", rawImageAbs)
+		return c.SendFile(rawImageAbs)
+	}
+
 	avifAbs, webpAbs, jxlAbs := helper.GenOptimizedAbsPath(metadata, targetHostName)
 	// Do the convertion based on supported formats and config
 	encoder.ConvertFilter(rawImageAbs, jxlAbs, avifAbs, webpAbs, extraParams, supportedFormats, nil)
@@ -252,21 +263,4 @@ func Convert(c *fiber.Ctx) error {
 
 	c.Set("X-Compression-Rate", helper.GetCompressionRate(rawImageAbs, finalFilename))
 	return c.SendFile(finalFilename)
-}
-
-// 新增：检查文件是否为图片的辅助函数
-func isImageFile(filename string) bool {
-	ext := strings.ToLower(path.Ext(filename))
-	if ext == "" {
-		return false
-	}
-	ext = ext[1:] // 移除开头的点
-
-	allowedTypes := config.Config.AllowedTypes
-	if len(allowedTypes) == 1 && allowedTypes[0] == "*" {
-		// 如果允许所有类型，则使用默认的图片类型列表
-		allowedTypes = config.NewWebPConfig().AllowedTypes
-	}
-
-	return slices.Contains(allowedTypes, ext)
 }
