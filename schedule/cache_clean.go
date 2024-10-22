@@ -69,19 +69,19 @@ func clearDirForOldestFiles(path string) error {
 func clearCacheFiles(path string, maxCacheSizeBytes int64) error {
 	dirSize, err := getDirSize(path)
 	if err != nil {
-		log.Errorf("Error getting directory size: %s\n", err.Error())
+		log.Errorf("获取目录大小时出错: %s\n", err.Error())
 		return err
 	}
 
 	for dirSize > maxCacheSizeBytes {
 		err := clearDirForOldestFiles(path)
 		if err != nil {
-			log.Errorf("Error clearing directory: %s\n", err.Error())
+			log.Errorf("清除目录时出错: %s\n", err.Error())
 			return err
 		}
 		dirSize, err = getDirSize(path)
 		if err != nil {
-			log.Errorf("Error getting directory size: %s\n", err.Error())
+			log.Errorf("获取目录大小时出错: %s\n", err.Error())
 			return err
 		}
 	}
@@ -89,27 +89,24 @@ func clearCacheFiles(path string, maxCacheSizeBytes int64) error {
 }
 
 func CleanCache() {
-	log.Info("MaxCacheSize is not 0, starting cache cleaning service")
+	log.Info("MaxCacheSize不为0，启动缓存清理服务")
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
-	for {
-		select {
-		case <-ticker.C:
-			// MB to bytes
-			maxCacheSizeBytes := int64(config.Config.MaxCacheSize) * 1024 * 1024
-			err := clearCacheFiles(config.Config.RemoteRawPath, maxCacheSizeBytes)
-			if err != nil {
-				log.Warn("Failed to clear remote raw cache")
-			}
-			err = clearCacheFiles(config.Config.ExhaustPath, maxCacheSizeBytes)
-			if err != nil && err != os.ErrNotExist {
-				log.Warn("Failed to clear remote raw cache")
-			}
-			err = clearCacheFiles(config.Config.MetadataPath, maxCacheSizeBytes)
-			if err != nil && err != os.ErrNotExist {
-				log.Warn("Failed to clear remote raw cache")
-			}
+	for range ticker.C {
+		// MB to bytes
+		maxCacheSizeBytes := int64(config.Config.MaxCacheSize) * 1024 * 1024
+
+		if err := clearCacheFiles(config.Config.RemoteRawPath, maxCacheSizeBytes); err != nil {
+			log.Warn("无法清除远程原始缓存")
+		}
+
+		if err := clearCacheFiles(config.Config.ExhaustPath, maxCacheSizeBytes); err != nil && err != os.ErrNotExist {
+			log.Warn("无法清除远程原始缓存")
+		}
+
+		if err := clearCacheFiles(config.Config.MetadataPath, maxCacheSizeBytes); err != nil && err != os.ErrNotExist {
+			log.Warn("无法清除远程原始缓存")
 		}
 	}
 }

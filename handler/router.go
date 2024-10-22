@@ -64,11 +64,10 @@ func Convert(c *fiber.Ctx) error {
 
 	log.Debugf("Incoming connection from %s %s %s", c.IP(), reqHostname, reqURIwithQuery)
 
-	// 	非图片清况下302到源文件
-	//
-	//
-	//
+	var rawImageAbs string
+	var metadata = config.MetaFile{}
 
+	// 	非图片清况下302到源文件
 	if !isImageFile(filename) {
 		log.Infof("Non-image file requested: %s", reqURI)
 		var redirectURL string
@@ -110,11 +109,27 @@ func Convert(c *fiber.Ctx) error {
 		}
 	}
 
-	//
-	//
+	// 新增：检查是否为WebP格式
+	if strings.ToLower(path.Ext(filename)) == ".webp" {
+		log.Infof("Original image is already in WebP format: %s", reqURI)
+		var webpImagePath string
+		if proxyMode {
+			// 对于代理模式，确保文件已经被下载
+			metadata = fetchRemoteImg(realRemoteAddr, targetHostName)
+			webpImagePath = path.Join(config.Config.RemoteRawPath, targetHostName, metadata.Id)
+		} else {
+			webpImagePath = path.Join(config.Config.ImgPath, reqURI)
+		}
+
+		// 检查文件是否存在
+		if helper.FileExists(webpImagePath) {
+			// 直接返回原WebP图片
+			return c.SendFile(webpImagePath)
+		}
+	}
 
 	if !helper.CheckAllowedType(filename) {
-		msg := "File extension not allowed! " + filename
+		msg := "不允许的文件扩展名 " + filename
 		log.Warn(msg)
 		c.Status(http.StatusBadRequest)
 		_ = c.Send([]byte(msg))
@@ -170,10 +185,8 @@ func Convert(c *fiber.Ctx) error {
 		log.Debugf("realRemoteAddr is %s", realRemoteAddr)
 	}
 
-	var rawImageAbs string
-	var metadata = config.MetaFile{}
 	if proxyMode {
-		// this is proxyMode, we'll have to use this url to download and save it to local path, which also gives us rawImageAbs
+		// 这是 proxyMode，我们必须使用这个 url 来下载并将其保存到本地路径，这也为我们提供了 rawImageAbs
 		// https://test.webp.sh/mypic/123.jpg?someother=200&somebugs=200
 
 		metadata = fetchRemoteImg(realRemoteAddr, targetHostName)
@@ -189,7 +202,7 @@ func Convert(c *fiber.Ctx) error {
 		}
 		// detect if source file has changed
 		if metadata.Checksum != helper.HashFile(rawImageAbs) {
-			log.Info("Source file has changed, re-encoding...")
+			log.Info("源文件已更改，重新编码...")
 			helper.WriteMetadata(reqURIwithQuery, "", targetHostName)
 			cleanProxyCache(path.Join(config.Config.ExhaustPath, targetHostName, metadata.Id))
 		}

@@ -134,21 +134,21 @@ func preProcessImage(img *vips.ImageRef, imageType string, extraParams config.Ex
 	switch imageType {
 	case "webp":
 		if img.Metadata().Width > config.WebpMax || img.Metadata().Height > config.WebpMax {
-			return errors.New("WebP: image too large")
+			return errors.New("WebP：图像太大")
 		}
 		imageFormat := img.Format()
 		if slices.Contains(webpIgnore, imageFormat) {
 			// Return err to render original image
-			return errors.New("WebP encoder: ignore image type")
+			return errors.New("WebP 编码器：忽略图像类型")
 		}
 	case "avif":
 		if img.Metadata().Width > config.AvifMax || img.Metadata().Height > config.AvifMax {
-			return errors.New("AVIF: image too large")
+			return errors.New("AVIF：图像太大")
 		}
 		imageFormat := img.Format()
 		if slices.Contains(avifIgnore, imageFormat) {
 			// Return err to render original image
-			return errors.New("AVIF encoder: ignore image type")
+			return errors.New("AVIF 编码器：忽略图像类型")
 		}
 	}
 
