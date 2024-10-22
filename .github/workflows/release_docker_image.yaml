@@ -1,4 +1,5 @@
-name: Build docker images
+name: Build and Push Docker Image
+
 on:
   push:
     paths-ignore:
@@ -16,8 +17,26 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libvips-dev
+
+      - name: Build for amd64
+        run: |
+          GOOS=linux GOARCH=amd64 go build -o builds/webp-server-linux-amd64 .
+
+      - name: Build for arm64
+        run: |
+          GOOS=linux GOARCH=arm64 go build -o builds/webp-server-linux-arm64 .
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -31,11 +50,12 @@ jobs:
           username: woodchen
           password: ${{ secrets.ACCESS_TOKEN }}
 
-      - name: Build and push
+      - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: Dockerfile
+          file: Dockerfile.multi
           push: true
           tags: woodchen/${{ env.IMAGE_NAME }}:latest
           platforms: linux/amd64,linux/arm64
+

@@ -33,11 +33,8 @@ static-check: install-staticcheck
 	tools/bin/staticcheck -checks all,-ST1000 ./...
 	GO111MODULE=on tools/bin/golangci-lint run -v $$($(PACKAGE_DIRECTORIES)) --config .golangci.yml
 
-test:
-	go test -v -coverprofile=coverage.txt -covermode=atomic ./...
-
 clean:
-	rm -rf prefetch remote-raw exhaust tools coverage.txt metadata exhaust_test
+	rm -rf prefetch remote-raw exhaust tools metadata exhaust_test
 
 docker:
 	DOCKER_BUILDKIT=1 docker build -t webpsh/webps .

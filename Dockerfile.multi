@@ -1,0 +1,18 @@
+FROM debian:bookworm-slim
+
+RUN apt-get update && \
+    apt-get install --no-install-recommends -y libvips ca-certificates libjemalloc2 libtcmalloc-minimal4 && \
+    rm -rf /var/lib/apt/lists/* && \
+    rm -rf /var/cache/apt/archives/*
+
+WORKDIR /usr/bin
+COPY builds/webp-server-linux-amd64 webp-server-linux-amd64
+COPY builds/webp-server-linux-arm64 webp-server-linux-arm64
+COPY config.json /etc/config.json
+
+RUN chmod +x webp-server-linux-amd64 webp-server-linux-arm64
+
+WORKDIR /opt
+VOLUME /opt/exhaust
+
+CMD ["/bin/sh", "-c", "if [ \"$(uname -m)\" = \"aarch64\" ]; then /usr/bin/webp-server-linux-arm64 --config /etc/config.json; else /usr/bin/webp-server-linux-amd64 --config /etc/config.json; fi"]

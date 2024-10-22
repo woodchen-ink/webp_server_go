@@ -89,7 +89,7 @@ func clearCacheFiles(path string, maxCacheSizeBytes int64) error {
 }
 
 func CleanCache() {
-	log.Info("MaxCacheSize不为0，启动缓存清理服务")
+	log.Info("MaxCacheSize不为0，启动缓存清理服务...")
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
@@ -98,15 +98,16 @@ func CleanCache() {
 		maxCacheSizeBytes := int64(config.Config.MaxCacheSize) * 1024 * 1024
 
 		if err := clearCacheFiles(config.Config.RemoteRawPath, maxCacheSizeBytes); err != nil {
-			log.Warn("无法清除远程原始缓存")
+			log.Warnf("清除远程原始缓存失败: %v", err)
 		}
 
 		if err := clearCacheFiles(config.Config.ExhaustPath, maxCacheSizeBytes); err != nil && err != os.ErrNotExist {
-			log.Warn("无法清除远程原始缓存")
+			log.Warnf("清除优化图像缓存失败: %v", err)
 		}
 
 		if err := clearCacheFiles(config.Config.MetadataPath, maxCacheSizeBytes); err != nil && err != os.ErrNotExist {
-			log.Warn("无法清除远程原始缓存")
+			log.Warnf("清除元数据缓存失败: %v", err)
 		}
+
 	}
 }
