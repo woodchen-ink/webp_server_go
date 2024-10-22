@@ -135,7 +135,7 @@ func Convert(c *fiber.Ctx) error {
 			}
 
 			// 处理图片
-			isSmall, err := helper.IsFileSizeSmall(rawImageAbs, 100*1024) // 100KB
+			isSmall, err := helper.IsFileSizeSmall(rawImageAbs, 30*1024) // 30KB
 			if err != nil {
 				processErr = fmt.Errorf("检查文件大小时出错: %v", err)
 				return
