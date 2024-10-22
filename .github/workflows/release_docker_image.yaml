@@ -39,3 +39,20 @@ jobs:
           push: true
           tags: woodchen/${{ env.IMAGE_NAME }}:latest
           platforms: linux/amd64,linux/arm64
+      
+      - name: Execute deployment commands
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: root
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            # 解压文件
+            docker pull woodchen/webp-server-go
+  
+            # 停止并删除容器
+            docker stop webp-server-go || true
+            docker rm webp-server-go || true
+  
+            # 启动容器
+            docker compose -f /opt/1panel/docker/compose/webp-server-go/docker-compose.yml up -d
