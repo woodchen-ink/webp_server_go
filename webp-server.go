@@ -80,6 +80,9 @@ func init() {
 	config.LoadConfig()
 	fmt.Printf("\n %c[1;32m%s%c[0m\n\n", 0x1B, banner, 0x1B)
 
+	// 设置 Gin 为发布模式
+	gin.SetMode(gin.ReleaseMode)
+
 	// 初始化 Gin 路由
 	router = gin.New()
 	setupLogger()
@@ -109,9 +112,9 @@ func main() {
 
 	listenAddress := config.Config.Host + ":" + config.Config.Port
 
-	// 设置路由
-	router.GET("/healthz", handler.Healthz)
-	router.Any("/*path", handler.Convert) // 使用 Any 来匹配所有方法
+	// 设置路由 - 注意顺序
+	router.GET("/healthz", handler.Healthz) // 具体路由放在前面
+	router.NoRoute(handler.Convert)         // 使用 NoRoute 替代 /*path
 
 	// 设置服务器参数
 	server := &http.Server{
