@@ -12,7 +12,6 @@ import (
 	"webp_server_go/config"
 	"webp_server_go/helper"
 
-	"github.com/gofiber/fiber/v2"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -39,7 +38,7 @@ func downloadFile(filepath string, url string) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != fiber.StatusOK {
+	if resp.StatusCode != http.StatusOK {
 		log.Errorf("获取远程图像失败。上游链接: %s, 状态码: %s", url, resp.Status)
 		return fmt.Errorf("远程服务器返回非预期状态")
 	}
@@ -103,7 +102,7 @@ func pingURL(url string) (string, int64, time.Time) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == fiber.StatusOK {
+	if resp.StatusCode == http.StatusOK {
 		etag = resp.Header.Get("ETag")
 		sizeStr := resp.Header.Get("Content-Length")
 		size, _ = strconv.ParseInt(sizeStr, 10, 64)

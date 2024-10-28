@@ -3,32 +3,20 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"runtime"
 	"time"
 	"webp_server_go/config"
 	"webp_server_go/encoder"
 	"webp_server_go/handler"
-
 	schedule "webp_server_go/schedule"
 
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/logger"
-	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 )
 
-// https://docs.gofiber.io/api/fiber
-var app = fiber.New(fiber.Config{
-	ServerHeader:          "WebP Server Go",
-	AppName:               "WebP Server Go",
-	DisableStartupMessage: true,
-	ProxyHeader:           "X-Real-IP",
-	ReadBufferSize:        config.Config.ReadBufferSize, // 用于请求读取的每个连接缓冲区大小。这也限制了最大标头大小。如果您的客户端发送多 KB RequestURI 和/或多 KB 标头（例如，BIG cookies），请增加此缓冲区。
-	WriteBufferSize:       1024 * 4,
-	Concurrency:           config.Config.Concurrency,      // 最大并发连接数。
-	DisableKeepalive:      config.Config.DisableKeepalive, // 禁用保持活动连接，服务器将在向客户端发送第一个响应后关闭传入连接
-})
+var router *gin.Engine
 
 func setupLogger() {
 	log.SetOutput(os.Stdout)
@@ -44,12 +32,23 @@ func setupLogger() {
 	log.SetFormatter(formatter)
 	log.SetLevel(log.InfoLevel)
 
-	// fiber logger format
-	app.Use(logger.New(logger.Config{
-		Format:     config.FiberLogFormat,
-		TimeFormat: config.TimeDateFormat,
+	// 设置 Gin 的日志格式
+	gin.SetMode(gin.ReleaseMode)
+	router.Use(gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
+		return fmt.Sprintf("%s - [%s] \"%s %s %s\" %d %s \"%s\" %s\n",
+			param.ClientIP,
+			param.TimeStamp.Format(config.TimeDateFormat),
+			param.Method,
+			param.Path,
+			param.Request.Proto,
+			param.StatusCode,
+			param.Latency,
+			param.Request.UserAgent(),
+			param.ErrorMessage,
+		)
 	}))
-	app.Use(recover.New(recover.Config{}))
+	router.Use(gin.Recovery())
+
 	fmt.Println("Allowed file types as source:", config.Config.AllowedTypes)
 	fmt.Println("Convert to WebP Enabled:", config.Config.EnableWebP)
 	fmt.Println("Convert to AVIF Enabled:", config.Config.EnableAVIF)
@@ -66,6 +65,7 @@ func init() {
 		
 		WebP Server Go - v%s
 		Developed by WebP Server team. https://github.com/webp-sh`, config.Version)
+
 	// main init is the last one to be called
 	flag.Parse()
 	// process cli params
@@ -79,6 +79,9 @@ func init() {
 	}
 	config.LoadConfig()
 	fmt.Printf("\n %c[1;32m%s%c[0m\n\n", 0x1B, banner, 0x1B)
+
+	// 初始化 Gin 路由
+	router = gin.New()
 	setupLogger()
 }
 
@@ -106,12 +109,26 @@ func main() {
 
 	listenAddress := config.Config.Host + ":" + config.Config.Port
 
-	app.Get("/healthz", handler.Healthz)
-	app.Get("/*", handler.Convert)
+	// 设置路由
+	router.GET("/healthz", handler.Healthz)
+	router.Any("/*path", handler.Convert) // 使用 Any 来匹配所有方法
+
+	// 设置服务器参数
+	server := &http.Server{
+		Addr:              listenAddress,
+		Handler:           router,
+		ReadTimeout:       time.Second * 30,
+		WriteTimeout:      time.Second * 30,
+		ReadHeaderTimeout: time.Second * 10,
+		MaxHeaderBytes:    config.Config.ReadBufferSize,
+	}
 
 	go monitorMemoryUsage()
 
 	fmt.Println("WebP Server Go is Running on http://" + listenAddress)
 
-	_ = app.Listen(listenAddress)
+	// 启动服务器
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("Failed to start server: %v", err)
+	}
 }

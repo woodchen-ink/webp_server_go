@@ -1,9 +1,11 @@
 package handler
 
 import (
-	"github.com/gofiber/fiber/v2"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
 
-func Healthz(c *fiber.Ctx) error {
-	return c.SendString("WebP Server Go up and running!🥳")
+func Healthz(c *gin.Context) {
+	c.String(http.StatusOK, "WebP Server Go up and running!🥳")
 }

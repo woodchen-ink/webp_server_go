@@ -17,11 +17,11 @@ import (
 
 const (
 	TimeDateFormat = "2006-01-02 15:04:05"
-	FiberLogFormat = "${ip} - [${time}] ${method} ${url} ${status} ${referer} ${ua}\n"
-	WebpMax        = 16383
-	AvifMax        = 65536
-	HttpRegexp     = `^https?://`
-	SampleConfig   = `
+	// GinLogFormat   = "%s - [%s] \"%s %s %s\" %d %s \"%s\" %s"
+	WebpMax      = 16383
+	AvifMax      = 65536
+	HttpRegexp   = `^https?://`
+	SampleConfig = `
 {
   "HOST": "127.0.0.1",
   "PORT": "3333",
