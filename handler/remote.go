@@ -65,18 +65,18 @@ func downloadFile(filepath string, url string) error {
 		return fmt.Errorf("写入文件时发生错误")
 	}
 
-	log.Infof("文件下载成功。上游链接: %s, 保存路径: %s", url, filepath)
+	// log.Infof("文件下载成功")
 	return nil
 }
 
 func fetchRemoteImg(url, subdir string) (string, bool, error) {
-	log.Infof("正在获取远程图像: %s", url)
+	// log.Infof("正在获取远程图像: %s", url)
 
 	fileName := helper.HashString(url)
 	localRawImagePath := path.Join(config.Config.RemoteRawPath, subdir, fileName)
 
 	if helper.FileExists(localRawImagePath) {
-		log.Infof("远程图像已存在于本地: %s", localRawImagePath)
+		// log.Infof("远程图像已存在于本地: %s", localRawImagePath)
 		return localRawImagePath, false, nil
 	}
 
@@ -86,7 +86,7 @@ func fetchRemoteImg(url, subdir string) (string, bool, error) {
 		return "", false, fmt.Errorf("下载远程图像失败")
 	}
 
-	log.Infof("成功获取远程图像: %s", localRawImagePath)
+	// log.Infof("成功获取远程图像")
 	return localRawImagePath, true, nil
 }
 

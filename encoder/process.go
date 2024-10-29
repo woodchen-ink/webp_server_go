@@ -230,12 +230,12 @@ func preProcessImage(img *vips.ImageRef, imageType string, extraParams config.Ex
 		}
 	}
 
-	log.Debug("图像预处理完成")
+	// log.Debug("图像预处理完成")
 	return shouldCopyOriginal, nil
 }
 
 func ProcessAndSaveImage(rawImageAbs, exhaustFilename string, extraParams config.ExtraParams) error {
-	log.Infof("开始处理图像: 源文件=%s, 目标文件=%s", rawImageAbs, exhaustFilename)
+	// log.Infof("开始处理图像: 源文件=%s, 目标文件=%s", rawImageAbs, exhaustFilename)
 
 	// 创建目标目录
 	if err := os.MkdirAll(path.Dir(exhaustFilename), 0755); err != nil {
@@ -333,9 +333,9 @@ func ProcessAndSaveImage(rawImageAbs, exhaustFilename string, extraParams config
 			log.Errorf("复制原图到 EXHAUST_PATH 失败: %v", err)
 			return err
 		}
-		log.Infof("成功将原图复制到 EXHAUST_PATH: %s", exhaustFilename)
+		// log.Infof("成功将原图复制到 EXHAUST_PATH: %s", exhaustFilename)
 	} else {
-		log.Infof("图像处理成功: 目标文件=%s", exhaustFilename)
+		// log.Infof("图像处理成功: 目标文件=%s", exhaustFilename)
 	}
 
 	return nil

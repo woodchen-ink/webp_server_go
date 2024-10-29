@@ -171,7 +171,7 @@ func convertImage(rawPath, optimizedPath, imageType string, extraParams config.E
 	}
 
 	if convertedInfo.Size() > originalInfo.Size() {
-		log.Infof("转换后的图片大于原图，使用原图: %s", rawPath)
+		// log.Infof("转换后的图片大于原图，使用原图: %s", rawPath)
 		// 删除转换后的大文件
 		if err := os.Remove(optimizedPath); err != nil {
 			log.Warnf("删除大的转换文件失败: %v", err)
@@ -180,7 +180,7 @@ func convertImage(rawPath, optimizedPath, imageType string, extraParams config.E
 		return helper.CopyFile(rawPath, optimizedPath)
 	}
 
-	log.Infof("图像处理成功: 目标文件=%s", optimizedPath)
+	// log.Infof("图像处理成功: 目标文件=%s", optimizedPath)
 	return nil
 }
 
@@ -219,7 +219,7 @@ func jxlEncoder(img *vips.ImageRef, rawPath string, optimizedPath string) error 
 		return err
 	}
 
-	convertLog("JXL", rawPath, optimizedPath, quality)
+	// convertLog("JXL", rawPath, optimizedPath, quality)
 	return nil
 }
 
@@ -254,7 +254,7 @@ func avifEncoder(img *vips.ImageRef, rawPath string, optimizedPath string) error
 		return err
 	}
 
-	convertLog("AVIF", rawPath, optimizedPath, quality)
+	// convertLog("AVIF", rawPath, optimizedPath, quality)
 	return nil
 }
 
@@ -306,28 +306,28 @@ func webpEncoder(img *vips.ImageRef, rawPath string, optimizedPath string) error
 		return err
 	}
 
-	convertLog("WebP", rawPath, optimizedPath, quality)
+	// convertLog("WebP", rawPath, optimizedPath, quality)
 	return nil
 }
 
-func convertLog(itype, rawPath string, optimizedPath string, quality int) {
-	oldf, err := os.Stat(rawPath)
-	if err != nil {
-		log.Error(err)
-		return
-	}
+// func convertLog(itype, rawPath string, optimizedPath string, quality int) {
+// 	oldf, err := os.Stat(rawPath)
+// 	if err != nil {
+// 		log.Error(err)
+// 		return
+// 	}
 
-	newf, err := os.Stat(optimizedPath)
-	if err != nil {
-		log.Error(err)
-		return
-	}
+// 	newf, err := os.Stat(optimizedPath)
+// 	if err != nil {
+// 		log.Error(err)
+// 		return
+// 	}
 
-	// 计算压缩率
-	deflateRate := float32(newf.Size()) / float32(oldf.Size()) * 100
+// 	// 计算压缩率
+// 	deflateRate := float32(newf.Size()) / float32(oldf.Size()) * 100
 
-	// 记录转换信息
-	log.Infof("图像转换: 类型=%s, 质量=%d%%", itype, quality)
-	log.Infof("文件路径: 原始=%s, 优化=%s", rawPath, optimizedPath)
-	log.Infof("文件大小: 原始=%d字节, 优化=%d字节, 压缩率=%.2f%%", oldf.Size(), newf.Size(), deflateRate)
-}
+// 	// 记录转换信息
+// 	log.Infof("图像转换: 类型=%s, 质量=%d%%", itype, quality)
+// 	log.Infof("文件路径: 原始=%s, 优化=%s", rawPath, optimizedPath)
+// 	log.Infof("文件大小: 原始=%d字节, 优化=%d字节, 压缩率=%.2f%%", oldf.Size(), newf.Size(), deflateRate)
+// }

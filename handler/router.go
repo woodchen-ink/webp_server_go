@@ -42,18 +42,18 @@ func Convert(c *gin.Context) {
 		filename              = path.Base(reqURI)
 	)
 
-	log.Debugf("Incoming connection from %s %s", c.ClientIP(), reqURIwithQuery)
+	log.Debugf("传入连接来自 %s %s", c.ClientIP(), reqURIwithQuery)
 
 	// 首先检查是否为图片文件
 	if !isImageFile(filename) {
-		log.Infof("Non-image file requested: %s", reqURI)
+		log.Infof("请求非图像文件: %s", reqURI)
 		handleNonImageFile(c, reqURI)
 		return
 	}
 
 	// 检查文件类型是否允许
 	if !helper.CheckAllowedType(filename) {
-		msg := "File extension not allowed! " + filename
+		msg := "不允许文件扩展名！ " + filename
 		log.Warn(msg)
 		c.String(400, msg)
 		return
@@ -65,7 +65,7 @@ func Convert(c *gin.Context) {
 	// 检查路径是否匹配 IMG_MAP 中的任何前缀
 	matchedPrefix, matchedTarget := findMatchingPrefix(reqURI)
 	if matchedPrefix == "" {
-		log.Warnf("请求的路径不匹配任何配置的 IMG_MAP: %s", c.Request.URL.Path)
+		log.Warnf("请求的路径不匹配: %s", c.Request.URL.Path)
 		c.Status(404)
 		return
 	}
@@ -76,7 +76,7 @@ func Convert(c *gin.Context) {
 	// 检查文件是否已经在 EXHAUST_PATH 中
 	if helper.FileExists(exhaustFilename) {
 		if info, err := os.Stat(exhaustFilename); err == nil && info.Size() > 0 {
-			log.Infof("文件已存在于 EXHAUST_PATH，直接提供服务: %s", exhaustFilename)
+			log.Infof("文件已存在: %s", exhaustFilename)
 			c.File(exhaustFilename)
 			return
 		}
@@ -120,7 +120,7 @@ func handleNonImageFile(c *gin.Context, reqURI string) {
 		}
 	}
 
-	log.Infof("Redirecting to: %s", redirectURL)
+	log.Infof("重定向至: %s", redirectURL)
 	c.Redirect(302, redirectURL)
 }
 
@@ -267,7 +267,7 @@ func processAndSaveImage(c *gin.Context, rawImageAbs, exhaustFilename string, ex
 	} else {
 		err := encoder.ProcessAndSaveImage(rawImageAbs, tempFile, extraParams)
 		if err != nil {
-			log.Warnf("处理图片失败，将直接复制原图: %v", err)
+			// log.Warnf("处理图片失败，将直接复制原图: %v", err)
 			if copyErr := helper.CopyFile(rawImageAbs, tempFile); copyErr != nil {
 				return fmt.Errorf("复制原图失败: %v", copyErr)
 			}

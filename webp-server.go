@@ -58,13 +58,8 @@ func setupLogger() {
 func init() {
 	// Our banner
 	banner := fmt.Sprintf(`
-		▌ ▌   ▌  ▛▀▖ ▞▀▖                ▞▀▖
-		▌▖▌▞▀▖▛▀▖▙▄▘ ▚▄ ▞▀▖▙▀▖▌ ▌▞▀▖▙▀▖ ▌▄▖▞▀▖
-		▙▚▌▛▀ ▌ ▌▌   ▖ ▌▛▀ ▌  ▐▐ ▛▀ ▌   ▌ ▌▌ ▌
-		▘ ▘▝▀▘▀▀ ▘   ▝▀ ▝▀▘▘   ▘ ▝▀▘▘   ▝▀ ▝▀
-		
-		WebP Server Go - v%s
-		Developed by WebP Server team. https://github.com/woodchen-ink/webp_server_go`, config.Version)
+		WebP Server Go
+		https://github.com/woodchen-ink/webp_server_go`)
 
 	// main init is the last one to be called
 	flag.Parse()

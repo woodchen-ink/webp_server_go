@@ -46,19 +46,19 @@ func clearDirForOldestFiles(path string) error {
 	})
 
 	if err != nil {
-		log.Errorf("Error traversing directory: %s\n", err.Error())
+		log.Errorf("遍历目录时出错: %s\n", err.Error())
 		return err
 	}
 
 	if oldestFile != "" {
 		err := os.Remove(oldestFile)
 		if err != nil {
-			log.Errorf("Error deleting file %s: %s\n", oldestFile, err.Error())
+			log.Errorf("删除文件时出错 %s: %s\n", oldestFile, err.Error())
 			return err
 		}
-		log.Infof("Deleted oldest file: %s\n", oldestFile)
+		log.Infof("删除了最旧的文件: %s\n", oldestFile)
 	} else {
-		log.Infoln("No files found in the directory.")
+		log.Infoln("目录中没有找到文件.")
 	}
 	return nil
 }
