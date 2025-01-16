@@ -4,7 +4,7 @@ go 1.23
 
 require (
 	github.com/cespare/xxhash v1.1.0
-	github.com/davidbyttow/govips/v2 v2.15.0
+	github.com/davidbyttow/govips/v2 v2.16.0
 	github.com/gin-gonic/gin v1.10.0
 	github.com/h2non/filetype v1.1.4-0.20230123234534-cfcd7d097bc4
 	github.com/h2non/go-is-svg v0.0.0-20160927212452-35e8c4b0612c
